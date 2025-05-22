@@ -5,7 +5,7 @@ using NWayland.Protocols.Wayland;
 
 namespace NWayland.Interop
 {
-    public static unsafe class LibWayland
+    static unsafe class LibWayland
     {
         private const string Wayland = "libwayland-client.so.0";
 
