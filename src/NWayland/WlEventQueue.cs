@@ -1,6 +1,6 @@
-namespace NWayland.Interop;
+namespace NWayland;
 
-public class WlEventQueue
+public class WlEventQueue 
 {
     //TODO
     private WlEventQueue()

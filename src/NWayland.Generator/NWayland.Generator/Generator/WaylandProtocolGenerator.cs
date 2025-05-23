@@ -9,7 +9,7 @@ using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
 namespace NWayland.Generator
 {
-    partial class WaylandProtocolGenerator
+    public partial class WaylandProtocolGenerator
     {
         private readonly Dictionary<string, string> _protocolFullNames = new();
         private readonly Dictionary<string, string> _protocolNamespaces = new();
@@ -163,6 +163,10 @@ namespace NWayland.Generator
                             Argument(IdentifierName("iface")),
                             Argument(IdentifierName("ownsHandle"))
                         })))));
+
+                cl = cl.AddMembers(ClassDeclaration("Listener").WithModifiers(TokenList(Token(SyntaxKind.PublicKeyword)))
+                    .AddBaseListTypes(SimpleBaseType(ParseTypeName("global::NWayland.Interop.IWlEventListener")))
+                );
 
                 ns = ns.AddMembers(cl);
             }

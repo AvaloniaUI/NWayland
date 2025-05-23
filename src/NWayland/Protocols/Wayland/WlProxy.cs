@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using NWayland.Interop;
 
 namespace NWayland.Protocols.Wayland
@@ -67,7 +69,7 @@ namespace NWayland.Protocols.Wayland
                 return;
             DispatchEvent(opcode, arguments);
         }
-
+        
         public void Dispose()
         {
             Dispose(true);
@@ -103,46 +105,78 @@ namespace NWayland.Protocols.Wayland
             if (method.SinceVersion > Version)
                 throw new InvalidOperationException(
                     $"Method {method.Name} is not supported for interface version {Version}");
+
+            if (proxyType != null && listener == null && proxyType.Interface.Events.Count > 0)
+                throw new InvalidOperationException(
+                    "It's mandatory to pass a listener to an interface containing events");
             
             lock (_display.SyncRoot)
             {
                 if (_isDisposed)
                     throw new ObjectDisposedException(this.GetType().FullName);
-                WlArgument* args = stackalloc WlArgument[call.NormalArgs.Count + call.ProxyArgs.Count];
-                int normalIndex = 0, proxyIndex = 0;
-                for (var c = 0; c < method.Arguments.Count; c++)
+                WlArgument* args = stackalloc WlArgument[call.NormalArgs.Count + call.ObjectArgs.Count];
+                int normalIndex = 0, objIndex = 0;
+                List<IntPtr>? toDealloc = null; // TODO: pool
+                try
                 {
-                    var arg = method.Arguments[c];
-                    if (arg.Code == WaylandArgumentCodes.Object)
+                    for (var c = 0; c < method.Arguments.Count; c++)
                     {
-                        var objArg = call.ProxyArgs[proxyIndex];
-                        proxyIndex++;
-                        if (objArg._isDisposed)
-                            throw new ObjectDisposedException(objArg.GetType().FullName);
-                        args[c] = objArg;
+                        var arg = method.Arguments[c];
+                        if (arg.Code is WaylandArgumentCodes.Object or WaylandArgumentCodes.String)
+                        {
+                            var objArg = call.ObjectArgs[objIndex];
+                            objIndex++;
+                            if (objArg == null && !arg.AllowNull)
+                                throw new ArgumentNullException(); // TODO: Name
+                            if (arg.Code is WaylandArgumentCodes.Object)
+                            {
+                                var proxyArg = (WlProxy?)objArg;
+                                if (proxyArg?._isDisposed == true)
+                                    throw new ObjectDisposedException(objArg.GetType().FullName);
+                                args[c] = proxyArg;
+                            }
+                            else
+                            {
+                                var s = (string?)objArg;
+                                if (s == null)
+                                    args[c] = default;
+                                else
+                                {
+                                    var ptr = Marshal.StringToHGlobalAnsi(s);
+                                    (toDealloc ??= new()).Add(ptr);
+                                    args[c] = ptr;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            args[c] = call.NormalArgs[normalIndex];
+                            normalIndex++;
+                        }
                     }
-                    else
-                    {
-                        args[c] = call.NormalArgs[normalIndex];
-                        normalIndex++;
-                    }
+
+                    var flags = method.IsDestructor ? LibWayland.WlProxyMarshalFlags.Destroy : default;
+
+                    // TODO: Verify that constructed entity is from the same protocol,
+                    // otherwise where are we going to get a version
+                    var rv = LibWayland.wl_proxy_marshal_array_flags(Handle, call.OpCode,
+                        proxyType != null ? proxyType.Interface.GetNative() : null, (uint)Version, flags, args);
+
+                    if (proxyType != null)
+                        return proxyType.Factory(new WlProxyContext()
+                        {
+                            Display = _display,
+                            Queue = queue ?? _queue
+                        }, rv, proxyType.Interface, true);
+
+                    return null;
                 }
-
-                var flags = method.IsDestructor ? LibWayland.WlProxyMarshalFlags.Destroy : default;
-                
-                // TODO: Verify that constructed entity is from the same protocol,
-                // otherwise where are we going to get a version
-                var rv = LibWayland.wl_proxy_marshal_array_flags(Handle, call.OpCode,
-                    proxyType != null ? proxyType.Interface.GetNative() : null, (uint)Version, flags, args);
-
-                if (proxyType != null)
-                    return proxyType.Factory(new WlProxyContext()
-                    {
-                        Display = _display,
-                        Queue = queue ?? _queue
-                    }, rv, proxyType.Interface, true);
-                
-                return null;
+                finally
+                {
+                    if(toDealloc != null)
+                        foreach (var ptr in toDealloc)
+                            Marshal.FreeHGlobal(ptr);
+                }
             }
         }
 
@@ -151,11 +185,11 @@ namespace NWayland.Protocols.Wayland
             InvokeCore(ref call, null, null, null);
         }
 
-        public unsafe void InvokeNewId(ref WaylandCallBuilder call, WlProxyTypeDescriptor proxyType, IWlEventListener listener, WlEventQueue? queue)
+        public unsafe WlProxy InvokeNewId(ref WaylandCallBuilder call, WlProxyTypeDescriptor proxyType, IWlEventListener? listener, WlEventQueue? queue)
         {
             if (proxyType == null || listener == null)
                 throw new ArgumentNullException();
-            InvokeCore(ref call, proxyType, listener, queue);
+            return InvokeCore(ref call, proxyType, listener, queue);
         }
     }
 }

@@ -8,7 +8,7 @@ public ref struct WaylandCallBuilder : IDisposable
 {
     // TODO: Pooling
     internal List<WlArgument>? NormalArgs;
-    internal List<WlProxy>? ProxyArgs;
+    internal List<object>? ObjectArgs;
     private WlProxy _target;
     internal uint OpCode;
 
@@ -20,13 +20,15 @@ public ref struct WaylandCallBuilder : IDisposable
             OpCode = opcode
         };
     }
-
     
-
-    public void Arg(WlProxy arg)
+    private void ObjectArg(object arg)
     {
-        (ProxyArgs ??= new()).Add(arg);
+        (ObjectArgs ??= new()).Add(arg);
     }
+
+    public void Arg(WlProxy arg) => ObjectArg(arg);
+    
+    public void Arg(string arg) => ObjectArg(arg);
 
     private void Add(WlArgument arg) => (NormalArgs ??= new()).Add(arg);
     
@@ -59,9 +61,9 @@ public ref struct WaylandCallBuilder : IDisposable
     }
 
     // TODO: Queue management
-    public void InvokeNewId(WlProxyTypeDescriptor proxyType, IWlEventListener listener, WlEventQueue? queue)
+    public WlProxy InvokeNewId(WlProxyTypeDescriptor proxyType, IWlEventListener? listener, WlEventQueue? queue)
     {
-        _target.InvokeNewId(ref this, proxyType, listener, queue);
+        return _target.InvokeNewId(ref this, proxyType, listener, queue);
     }
     
     public void Dispose()

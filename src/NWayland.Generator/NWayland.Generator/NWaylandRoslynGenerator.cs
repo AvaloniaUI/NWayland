@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
+using System.Net;
 using System.Text;
 using System.Threading;
 using Microsoft.CodeAnalysis;
@@ -114,6 +115,9 @@ public class NWaylandRoslynGenerator : IIncrementalGenerator
             catch (Exception e)
             {
                 var error = e.ToString();
+#pragma warning disable RS1035
+                //System.IO.File.WriteAllText("/tmp/full.txt", error);
+#pragma warning restore RS1035
                 if (e is NwGeneratorException)
                     error = e.Message;
 
