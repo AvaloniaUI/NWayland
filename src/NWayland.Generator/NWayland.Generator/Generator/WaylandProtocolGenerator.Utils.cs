@@ -127,5 +127,20 @@ namespace NWayland.Generator
             return "byte";
 
         }
+
+
+        private static InvocationExpressionSyntax InvokeMemberCrLf(ExpressionSyntax expr, string member,
+            params ExpressionSyntax[] args) => InvokeMember(expr, member, args).CrLf();
+        
+        private static InvocationExpressionSyntax InvokeMember(ExpressionSyntax expr, string member,
+            params ExpressionSyntax[] args)
+        {
+            var memberExpr = MemberAccess(expr, member);
+            if (args.Length == 0)
+                return InvocationExpression(memberExpr);
+            var l = args.Length == 1 ? SingletonSeparatedList(Argument(args[0])) : SeparatedList(args.Select(Argument));
+
+            return InvocationExpression(MemberAccess(expr, member), ArgumentList(l));
+        }
     }
 }

@@ -5,6 +5,8 @@ namespace NWayland.Protocols.Wayland
 {
     public partial class WlDisplay
     {
+        internal object SyncRoot { get; } = new();
+        
         public static WlDisplay Connect(string? name = null)
         {
             var handle = LibWayland.wl_display_connect(name);

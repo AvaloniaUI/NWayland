@@ -10,7 +10,7 @@ namespace NWayland.Generator
 {
     partial class WaylandProtocolGenerator
     {
-        private MethodDeclarationSyntax? CreateMethod(WaylandProtocol protocol, WaylandProtocolInterface @interface, WaylandProtocolRequest request, int index)
+        private MethodDeclarationSyntax? CreateMethod(WaylandProtocol protocol, WaylandProtocolInterface @interface, WaylandProtocolMessage request, int index)
         {
             var newIdArgument = request.Arguments?.FirstOrDefault(static a => a.Type == WaylandArgumentTypes.NewId);
             if (newIdArgument is not null && newIdArgument.Interface is null)
@@ -49,12 +49,12 @@ namespace NWayland.Generator
                         case WaylandArgumentTypes.Int32:
                         case WaylandArgumentTypes.Fixed:
                         case WaylandArgumentTypes.FileDescriptor:
-                        case WaylandArgumentTypes.Uint32:
+                        case WaylandArgumentTypes.UInt32:
                         {
                             var nativeType = arg.Type switch
                             {
                                 WaylandArgumentTypes.Int32 => "int",
-                                WaylandArgumentTypes.Uint32 => "uint",
+                                WaylandArgumentTypes.UInt32 => "uint",
                                 WaylandArgumentTypes.Fixed => "WlFixed",
                                 _ => "int"
                             };

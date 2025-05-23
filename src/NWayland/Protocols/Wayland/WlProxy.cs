@@ -5,16 +5,43 @@ namespace NWayland.Protocols.Wayland
 {
     public abstract unsafe class WlProxy : IDisposable
     {
+        private readonly WlDisplay _display;
+        private readonly WlInterfaceDescription _interface;
         private readonly uint _id;
-
         private bool _isDisposed;
+        private WlEventQueue? _queue;
 
+        protected WlProxy(WlProxyContext context, IntPtr handle, WlInterfaceDescription @interface, bool ownsHandle = true)
+        {
+            if (!ownsHandle)
+                throw new NotSupportedException();
+            var display = context.Display;
+            _queue = context.Queue;
+            
+            if (display == null!)
+            {
+                if (this is WlDisplay)
+                    display = (WlDisplay)this;
+                else
+                    throw new ArgumentNullException(nameof(display));
+            }
+            _display = display;
+            _interface = @interface;
+            Version = LibWayland.wl_proxy_get_version(handle);
+            Handle = handle;
+            if (this is WlDisplay)
+                return;
+            // TODO: adjust
+            _id = LibWayland.RegisterProxy(this);
+        }
+        
         protected WlProxy(IntPtr handle, int version)
         {
             Version = version;
             Handle = handle;
             if (this is WlDisplay)
                 return;
+            // TODO: adjust
             _id = LibWayland.RegisterProxy(this);
         }
 
@@ -67,6 +94,68 @@ namespace NWayland.Protocols.Wayland
                 if (left[c] == 0)
                     return true;
             }
+        }
+
+        private unsafe WlProxy? InvokeCore(ref WaylandCallBuilder call, WlProxyTypeDescriptor? proxyType,
+            IWlEventListener? listener, WlEventQueue? queue)
+        {
+            var method = this._interface.Methods[(int)call.OpCode];
+            if (method.SinceVersion > Version)
+                throw new InvalidOperationException(
+                    $"Method {method.Name} is not supported for interface version {Version}");
+            
+            lock (_display.SyncRoot)
+            {
+                if (_isDisposed)
+                    throw new ObjectDisposedException(this.GetType().FullName);
+                WlArgument* args = stackalloc WlArgument[call.NormalArgs.Count + call.ProxyArgs.Count];
+                int normalIndex = 0, proxyIndex = 0;
+                for (var c = 0; c < method.Arguments.Count; c++)
+                {
+                    var arg = method.Arguments[c];
+                    if (arg.Code == WaylandArgumentCodes.Object)
+                    {
+                        var objArg = call.ProxyArgs[proxyIndex];
+                        proxyIndex++;
+                        if (objArg._isDisposed)
+                            throw new ObjectDisposedException(objArg.GetType().FullName);
+                        args[c] = objArg;
+                    }
+                    else
+                    {
+                        args[c] = call.NormalArgs[normalIndex];
+                        normalIndex++;
+                    }
+                }
+
+                var flags = method.IsDestructor ? LibWayland.WlProxyMarshalFlags.Destroy : default;
+                
+                // TODO: Verify that constructed entity is from the same protocol,
+                // otherwise where are we going to get a version
+                var rv = LibWayland.wl_proxy_marshal_array_flags(Handle, call.OpCode,
+                    proxyType != null ? proxyType.Interface.GetNative() : null, (uint)Version, flags, args);
+
+                if (proxyType != null)
+                    return proxyType.Factory(new WlProxyContext()
+                    {
+                        Display = _display,
+                        Queue = queue ?? _queue
+                    }, rv, proxyType.Interface, true);
+                
+                return null;
+            }
+        }
+
+        public unsafe void Invoke(ref WaylandCallBuilder call)
+        {
+            InvokeCore(ref call, null, null, null);
+        }
+
+        public unsafe void InvokeNewId(ref WaylandCallBuilder call, WlProxyTypeDescriptor proxyType, IWlEventListener listener, WlEventQueue? queue)
+        {
+            if (proxyType == null || listener == null)
+                throw new ArgumentNullException();
+            InvokeCore(ref call, proxyType, listener, queue);
         }
     }
 }

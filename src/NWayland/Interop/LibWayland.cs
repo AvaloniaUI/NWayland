@@ -46,10 +46,28 @@ namespace NWayland.Interop
         internal static extern IntPtr wl_proxy_marshal_array_constructor_versioned(IntPtr proxy, uint opcode, WlArgument* args, ref WlInterface @interface, uint version);
 
         [DllImport(Wayland, ExactSpelling = true)]
+        internal static extern IntPtr wl_proxy_marshal_array_constructor_versioned(IntPtr proxy, uint opcode, WlArgument* args, WlInterface* @interface, uint version);
+
+        [Flags]
+        internal enum WlProxyMarshalFlags : uint
+        {
+            None = 0,
+            Destroy = 1
+        }
+
+        [DllImport(Wayland, ExactSpelling = true)]
+        internal static extern IntPtr wl_proxy_marshal_array_flags(IntPtr proxy, uint opcode, WlInterface* @interface,
+            uint version, WlProxyMarshalFlags flags, WlArgument* args);
+        
+        
+        [DllImport(Wayland, ExactSpelling = true)]
         private static extern int wl_proxy_add_dispatcher(IntPtr proxy, WlProxyDispatcherDelegate dispatcherFunc, IntPtr implementation, IntPtr data);
 
         [DllImport(Wayland, ExactSpelling = true)]
         private static extern uint wl_proxy_get_id(IntPtr proxy);
+        
+        [DllImport(Wayland, ExactSpelling = true)]
+        internal static extern int wl_proxy_get_version(IntPtr proxy);
 
         [DllImport(Wayland, ExactSpelling = true)]
         internal static extern void wl_proxy_destroy(IntPtr proxy);

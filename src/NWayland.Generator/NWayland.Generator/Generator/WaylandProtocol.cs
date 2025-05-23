@@ -30,8 +30,8 @@ namespace NWayland.Generator
         public WaylandProtocolEnum[]? Enums { get; set; }
         [System.Xml.Serialization.XmlElementAttribute("event", typeof(WaylandProtocolMessage))]
         public WaylandProtocolMessage[]? Events { get; set; }
-        [System.Xml.Serialization.XmlElementAttribute("request", typeof(WaylandProtocolRequest))]
-        public WaylandProtocolRequest[]? Requests { get; set; }
+        [System.Xml.Serialization.XmlElementAttribute("request", typeof(WaylandProtocolMessage))]
+        public WaylandProtocolMessage[]? Requests { get; set; }
 
         [System.Xml.Serialization.XmlElementAttribute("description", typeof(WaylandProtocolDescription))]
         public WaylandProtocolDescription? Description { get; set; }
@@ -111,13 +111,7 @@ namespace NWayland.Generator
 
         [System.Xml.Serialization.XmlAttributeAttribute("since")]
         public int Since { get; set; }
-    }
-
-    [System.SerializableAttribute]
-    [System.ComponentModel.DesignerCategoryAttribute("code")]
-    [System.Xml.Serialization.XmlTypeAttribute(AnonymousType = true)]
-    public class WaylandProtocolRequest : WaylandProtocolMessage
-    {
+        
         [System.Xml.Serialization.XmlAttributeAttribute("type")]
         public string Type { get; set; }
     }

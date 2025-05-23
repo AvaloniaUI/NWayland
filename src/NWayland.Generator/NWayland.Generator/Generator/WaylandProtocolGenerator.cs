@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -44,7 +45,6 @@ namespace NWayland.Generator
                     _protocolFullNames.Add(i.Name, fullName);
                 }
             }
-            
         }
         
         
@@ -53,15 +53,37 @@ namespace NWayland.Generator
             var gen = new WaylandProtocolGenerator(nwgInputModel);
             var rv = new Dictionary<string, string>();
             foreach (var p in gen._protocols)
+            {
                 addSource(p.Value.Name, gen.Generate(p.Value));
+            }
         }
 
+        private WaylandProtocol? _currentProtocol;
+        Exception CreateError(string message)
+        {
+            if (_currentProtocol == null)
+                return new NwGeneratorException(message);
+            else
+                return new NwGeneratorWithFileException(message,
+                    _protocols.First(x => x.Value == _currentProtocol).Key.Path);
+        }
+        
         string Generate(WaylandProtocol protocol)
         {
-            var unit = CompilationUnit();
-            unit = Generate(unit, protocol);
+            if (_currentProtocol != null)
+                throw new InvalidOperationException("Reentrancy");
+            _currentProtocol = protocol;
+            try
+            {
+                var unit = CompilationUnit();
+                unit = Generate(unit, protocol);
 
-            return unit.NormalizeWhitespace("    ").ToFullString();
+                return unit.NormalizeWhitespace("    ").ToFullString().Replace("//CRLF", "");
+            }
+            finally
+            {
+                _currentProtocol = null;
+            }
             /*
             var cw = new AdhocWorkspace();
             var formatted = Formatter.Format(unit, cw, cw.Options
@@ -123,6 +145,24 @@ namespace NWayland.Generator
                             Argument(IdentifierName("version"))
                         }))));
                 cl = cl.AddMembers(ctor);
+                cl = cl.AddMembers(ConstructorDeclaration(cl.Identifier)
+                    .AddModifiers(Token(SyntaxKind.PrivateKeyword))
+                    .WithParameterList(ParameterList(
+                        SeparatedList(new[]
+                        {
+                            Parameter(Identifier("context")).WithType(ParseTypeName("WlProxyContext")),
+                            Parameter(Identifier("handle")).WithType(ParseTypeName("IntPtr")),
+                            Parameter(Identifier("iface")).WithType(ParseTypeName("WlInterfaceDescription")),
+                            Parameter(Identifier("ownsHandle")).WithType(ParseTypeName("bool"))
+                        }))).WithBody(Block())
+                    .WithInitializer(ConstructorInitializer(SyntaxKind.BaseConstructorInitializer,
+                        ArgumentList(SeparatedList(new[]
+                        {
+                            Argument(IdentifierName("context")),
+                            Argument(IdentifierName("handle")),
+                            Argument(IdentifierName("iface")),
+                            Argument(IdentifierName("ownsHandle"))
+                        })))));
 
                 ns = ns.AddMembers(cl);
             }

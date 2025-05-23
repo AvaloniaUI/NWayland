@@ -41,12 +41,12 @@ namespace NWayland.Generator
                         case WaylandArgumentTypes.Int32:
                         case WaylandArgumentTypes.Fixed:
                         case WaylandArgumentTypes.FileDescriptor:
-                        case WaylandArgumentTypes.Uint32:
+                        case WaylandArgumentTypes.UInt32:
                         {
                             var nativeType = arg.Type switch
                             {
                                 WaylandArgumentTypes.Int32 => "int",
-                                WaylandArgumentTypes.Uint32 => "uint",
+                                WaylandArgumentTypes.UInt32 => "uint",
                                 WaylandArgumentTypes.Fixed => "WlFixed",
                                 _ => "int"
                             };
@@ -59,7 +59,7 @@ namespace NWayland.Generator
                             var fieldName = arg.Type switch
                             {
                                 WaylandArgumentTypes.Int32 => "Int32",
-                                WaylandArgumentTypes.Uint32 => "UInt32",
+                                WaylandArgumentTypes.UInt32 => "UInt32",
                                 WaylandArgumentTypes.Fixed => "WlFixed",
                                 _ => "Int32"
                             };
