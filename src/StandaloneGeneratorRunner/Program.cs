@@ -25,6 +25,8 @@ class Program
             Console.WriteLine(name+".cs:");
             Console.WriteLine("=========================");
             Console.WriteLine();
+            Console.WriteLine(src);
+            Console.WriteLine();
         });
         
         Console.WriteLine("Hello, World!");

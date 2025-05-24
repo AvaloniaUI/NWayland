@@ -1,7 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 
-namespace NWayland.Interop
+namespace NWayland
 {
     public readonly struct WlFixed : IComparable<WlFixed>, IEquatable<WlFixed>
     {

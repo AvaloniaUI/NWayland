@@ -196,15 +196,9 @@ namespace NWayland.Generator
                     Argument(TypeOfExpression(ParseTypeName(cl.Identifier.ToString()))),
                     Argument(ParenthesizedLambdaExpression(ParameterList(SeparatedList([
                             Parameter(Identifier("ctx")),
-                            Parameter(Identifier("handle")),
-                            Parameter(Identifier("iface")),
-                            Parameter(Identifier("ownsHandle")),
                         ])), null,
                         ObjectCreationExpression(ParseTypeName(cl.Identifier.ToString()), ArgumentList(SeparatedList([
                             Argument(IdentifierName("ctx")),
-                            Argument(IdentifierName("handle")),
-                            Argument(IdentifierName("iface")),
-                            Argument(IdentifierName("ownsHandle"))
                         ])), null)
                     ))
                 ])), null);

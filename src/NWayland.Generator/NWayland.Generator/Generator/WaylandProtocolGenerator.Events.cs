@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -8,23 +9,29 @@ namespace NWayland.Generator
 {
     partial class WaylandProtocolGenerator
     {
-        private ClassDeclarationSyntax WithEvents(ClassDeclarationSyntax cl, WaylandProtocol protocol, WaylandProtocolInterface @interface)
+        private ClassDeclarationSyntax WithEvents(ClassDeclarationSyntax cl, WaylandProtocol protocol,
+            WaylandProtocolInterface @interface)
         {
             var evs = @interface.Events ?? Array.Empty<WaylandProtocolMessage>();
-            var eventInterface = InterfaceDeclaration("IEvents")
-                .WithModifiers(TokenList(Token(SyntaxKind.PublicKeyword)));
 
-            var switchStatement= SwitchStatement(IdentifierName("opcode"));
+            var eventsClass = ClassDeclaration("Listener")
+                .AddBaseListTypes(SimpleBaseType(ParseTypeName("global::NWayland.Interop.IWlEventsListener")))
+                .WithModifiers(TokenList(Token(SyntaxKind.PublicKeyword), Token(SyntaxKind.AbstractKeyword)));
+
+            var switchStatement = SwitchStatement(MemberAccess(IdentifierName("arguments"), "Opcode"));
+            var senderExpr = CastExpression(ParseTypeName(GetWlInterfaceTypeName(@interface.Name)),
+                MemberAccess(IdentifierName("arguments"), "Sender"));
+
             for (var eventIndex = 0; eventIndex < evs.Length; eventIndex++)
             {
                 var ev = evs[eventIndex];
                 var eventName = $"On{Pascalize(ev.Name)}";
 
                 var handlerParameters = new SeparatedSyntaxList<ParameterSyntax>();
-                var arguments = new SeparatedSyntaxList<ArgumentSyntax>();
+
                 handlerParameters = handlerParameters.Add(Parameter(Identifier("eventSender"))
                     .WithType(ParseTypeName(GetWlInterfaceTypeName(@interface.Name))));
-                arguments = arguments.Add(Argument(ThisExpression()));
+                var arguments = new List<ExpressionSyntax>() { senderExpr.CrLfPrefix() };
 
                 var eargs = ev.Arguments ?? Array.Empty<WaylandProtocolArgument>();
                 for (var argIndex = 0; argIndex < eargs.Length; argIndex++)
@@ -32,134 +39,102 @@ namespace NWayland.Generator
                     var arg = eargs[argIndex];
                     TypeSyntax? parameterType = null;
 
-                    ExpressionSyntax argument = ElementAccessExpression(IdentifierName("arguments"),
-                        BracketedArgumentList(SingletonSeparatedList(Argument(MakeLiteralExpression(argIndex)))));
+                    ExpressionSyntax bundle = IdentifierName("arguments");
 
                     var argName = $"@{Pascalize(arg.Name, true)}";
-                    switch (arg.Type)
+                    ExpressionSyntax argument;
+
+                    var arrayTypeHint = GetTypeNameForArray(protocol.Name, @interface.Name, ev.Name, arg.Name);
+
+                    string IfaceName() => GetWlInterfaceTypeName(arg.Interface
+                                                                 ?? throw CreateError(
+                                                                     "Don't know how to marshal events without interface",
+                                                                     @interface, ev, arg));
+                    var type = arg.Type switch
                     {
-                        case WaylandArgumentTypes.Int32:
-                        case WaylandArgumentTypes.Fixed:
-                        case WaylandArgumentTypes.FileDescriptor:
-                        case WaylandArgumentTypes.UInt32:
-                        {
-                            var nativeType = arg.Type switch
-                            {
-                                WaylandArgumentTypes.Int32 => "int",
-                                WaylandArgumentTypes.UInt32 => "uint",
-                                WaylandArgumentTypes.Fixed => "WlFixed",
-                                _ => "int"
-                            };
+                        WaylandArgumentTypes.Int32 => "int",
+                        WaylandArgumentTypes.UInt32 => "uint",
+                        WaylandArgumentTypes.Fixed => "global::NWayland.WlFixed",
+                        WaylandArgumentTypes.FileDescriptor => "int",
+                        WaylandArgumentTypes.String => "string",
+                        WaylandArgumentTypes.Object => GetWlInterfaceTypeNameOrWlProxy(arg.Interface),
+                        WaylandArgumentTypes.Array =>
+                            $"global::System.ReadOnlySpan<{arrayTypeHint}>",
+                        WaylandArgumentTypes.NewId => $"global::NWayland.NewId<{IfaceName()}, {IfaceName()}.Listener>",
+                        _ => throw CreateError("Unknown type: " + arg.Type)
+                    };
 
-                            var managedType =
-                                TryGetEnumTypeReference(protocol.Name, @interface.Name, ev.Name, arg.Name, arg.Enum) ??
-                                nativeType;
+                    var convertedType = type;
+                    if (arg.Type == WaylandArgumentTypes.Int32 || arg.Type == WaylandArgumentTypes.UInt32)
+                        convertedType =
+                            TryGetEnumTypeReference(protocol.Name, @interface.Name, ev.Name, arg.Name, arg.Enum) ??
+                            type;
 
-                            parameterType = ParseTypeName(managedType);
-                            var fieldName = arg.Type switch
-                            {
-                                WaylandArgumentTypes.Int32 => "Int32",
-                                WaylandArgumentTypes.UInt32 => "UInt32",
-                                WaylandArgumentTypes.Fixed => "WlFixed",
-                                _ => "Int32"
-                            };
+                    parameterType = ParseTypeName(convertedType);
 
-                            argument = MemberAccess(argument, fieldName);
+                    if (
+                        arg.AllowNull && arg.Type is WaylandArgumentTypes.Object or WaylandArgumentTypes.String)
+                        parameterType = NullableType(parameterType);
 
-                            if (managedType != nativeType)
-                                argument = CastExpression(ParseTypeName(managedType), argument);
-                            break;
-                        }
-                        case WaylandArgumentTypes.NewId:
-                            parameterType = ParseTypeName(Pascalize(arg.Interface));
-                            argument = ObjectCreationExpression(parameterType)
-                                .WithArgumentList(
-                                    ArgumentList(SeparatedList(new[]
-                                        {
-                                            Argument(MemberAccess(argument, "IntPtr")),
-                                            Argument(IdentifierName("Version"))
-                                        }
-                                    )));
-                            break;
-                        case WaylandArgumentTypes.String:
-                            parameterType = arg.AllowNull ? NullableType(ParseTypeName("string")) : ParseTypeName("string");
+                    var argumentGetterName = arg.Type switch
+                    {
+                        WaylandArgumentTypes.Int32 => "GetInt32",
+                        WaylandArgumentTypes.UInt32 => "GetUInt32",
+                        WaylandArgumentTypes.FileDescriptor => "GetInt32",
+                        WaylandArgumentTypes.Fixed => "GetWlFixed",
+                        WaylandArgumentTypes.String => "GetString",
+                        WaylandArgumentTypes.Object => $"GetProxy<{GetWlInterfaceTypeNameOrWlProxy(arg.Interface)}>",
+                        WaylandArgumentTypes.Array => $"GetArray<{arrayTypeHint}>",
+                        WaylandArgumentTypes.NewId => $"GetNewId<{IfaceName()}, {IfaceName()}.Listener>",
 
-                            argument = InvocationExpression(
-                                MemberAccess(ParseTypeName("Marshal"), "PtrToStringAnsi"),
-                                ArgumentList(SingletonSeparatedList(Argument(MemberAccess(argument, "IntPtr")))));
-                            break;
-                        case WaylandArgumentTypes.Object:
-                        {
-                            var parameterTypeString = arg.Interface is null ? "WlProxy" : GetWlInterfaceTypeName(arg.Interface);
-                            parameterType = arg.AllowNull ? NullableType(ParseTypeName(parameterTypeString)) : ParseTypeName(parameterTypeString);
-                            argument = InvocationExpression(MemberAccess(ParseTypeName("WlProxy"),
-                                    $"FromNative<{parameterTypeString}>"),
-                                ArgumentList(SingletonSeparatedList(Argument(MemberAccess(argument, "IntPtr")))));
-                            break;
-                        }
-                        case WaylandArgumentTypes.Array when arg.AllowNull:
-                            throw new NotSupportedException("Wrapping nullable arrays is currently not supported");
-                        case WaylandArgumentTypes.Array:
-                        {
-                            var arrayElementType = GetTypeNameForArray(protocol.Name, @interface.Name, ev.Name, arg.Name);
-                            parameterType = ParseTypeName($"ReadOnlySpan<{arrayElementType}>");
-                            argument = InvocationExpression(
-                                MemberAccess(ParseTypeName("WlArray"), $"SpanFromWlArrayPtr<{arrayElementType}>"),
-                                ArgumentList(SingletonSeparatedList(Argument(MemberAccess(argument, "IntPtr")))));
-                            break;
-                        }
-                    }
+                    };
+
+                    argument = InvokeMember(bundle, argumentGetterName, MakeLiteralExpression(argIndex))
+                        .CrLfPrefix();
+
+                    if (convertedType != type)
+                        argument = CastExpression(ParseTypeName(convertedType), argument);
 
                     handlerParameters = handlerParameters.Add(Parameter(Identifier(argName)).WithType(parameterType));
-                    arguments = arguments.Add(Argument(argument));
+                    arguments.Add(argument);
                 }
 
                 var method = MethodDeclaration(ParseTypeName("void"), eventName)
+                    .WithModifiers(TokenList(Token(SyntaxKind.ProtectedKeyword), Token(SyntaxKind.VirtualKeyword)))
                     .WithParameterList(ParameterList(handlerParameters))
-                    .WithSemicolonToken(Token(SyntaxKind.SemicolonToken));
+                    .WithBody(Block());
+
 
                 method = WithSummary(method, ev.Description);
 
-                eventInterface = eventInterface.AddMembers(method);
+                eventsClass = eventsClass.AddMembers(method);
 
                 switchStatement = switchStatement.AddSections(
                     SwitchSection(
                         SingletonList<SwitchLabelSyntax>(
                             CaseSwitchLabel(MakeLiteralExpression(eventIndex))),
                         List(new StatementSyntax[]
-                        {
-                            ExpressionStatement(ConditionalAccessExpression(IdentifierName("Events"),
-                                InvocationExpression(MemberBindingExpression(IdentifierName(eventName)))
-                                    .WithArgumentList(ArgumentList(arguments)))),
-                            BreakStatement()
-                        }
+                            {
+                                ExpressionStatement(
+                                    InvokeMember(IdentifierName("this"), eventName, arguments.ToArray())),
+                                BreakStatement()
+                            }
                         )));
             }
 
-            cl = cl.AddMembers(eventInterface);
-            cl = cl.AddMembers(PropertyDeclaration(NullableType(ParseTypeName("IEvents")), "Events")
-                .WithModifiers(TokenList(Token(SyntaxKind.PublicKeyword)))
-                .WithAccessorList(AccessorList(List(new[]
-                {
-                    AccessorDeclaration(SyntaxKind.GetAccessorDeclaration)
-                        .WithSemicolonToken(Semicolon()),
-                    AccessorDeclaration(SyntaxKind.SetAccessorDeclaration)
-                        .WithSemicolonToken(Semicolon())
-                })))
-            );
-
-            var dispatchEvent = MethodDeclaration(ParseTypeName("void"), "DispatchEvent")
-                .WithModifiers(TokenList(Token(SyntaxKind.ProtectedKeyword), Token(SyntaxKind.OverrideKeyword)))
+            var dispatchEvent = MethodDeclaration(ParseTypeName("void"),
+                    "global::NWayland.Interop.IWlEventsListener.DispatchEvent")
                 .WithParameterList(ParameterList(SeparatedList(new[]
                     {
-                        Parameter(Identifier("opcode")).WithType(ParseTypeName("uint")),
-                        Parameter(Identifier("arguments")).WithType(ParseTypeName("WlArgument*"))
+                        Parameter(Identifier("arguments"))
+                            .WithType(ParseTypeName("global::NWayland.Interop.WlEventArgs"))
                     }
-                )));
+                ))).WithBody(switchStatement.Sections.Count != 0 ? Block(switchStatement) : Block());
 
-            cl = cl.AddMembers(
-                dispatchEvent.WithBody(switchStatement.Sections.Count != 0 ? Block(switchStatement) : Block()));
+            eventsClass = eventsClass.AddMembers(dispatchEvent);
 
+
+            cl = cl.AddMembers(eventsClass);
             return cl;
         }
     }

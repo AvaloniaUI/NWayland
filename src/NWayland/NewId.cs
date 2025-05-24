@@ -1,25 +1,26 @@
+using NWayland.Interop;
 using NWayland.Protocols.Wayland;
 
 namespace NWayland;
 
-public ref struct NewId<T> where T : WlProxy
+public ref struct NewId<TProxy, TListener> 
+    where TProxy : WlProxy 
+    where TListener : class, IWlEventsListener
 {
-    private readonly NewIdImpl<T> _impl;
+    private readonly NewIdImpl<TProxy> _impl;
 
-    internal NewId(NewIdImpl<T> impl)
+    internal NewId(NewIdImpl<TProxy> impl)
     {
         _impl = impl;
     }
 
-    public T GetAndConsume() => _impl.GetAndConsume();
+    public TProxy GetAndConsume(TListener? listener = null) => _impl.GetAndConsume(listener);
 }
 
-class NewIdImpl<T>(T proxy) where T : WlProxy
+class NewIdImpl<T>(WlEventArgsImpl args, int index) where T : WlProxy
 {
-    public bool IsConsumed { get; private set; }
-    public T GetAndConsume()
+    public T GetAndConsume(IWlEventsListener? listener)
     {
-        IsConsumed = true;
-        return proxy;
+        return args.GetNewIdProxy<T>(index, listener);
     }
 }

@@ -131,18 +131,9 @@ public class WlMessageDescription
     }
 }
 
-public class WlProxyContext
-{
-    internal WlProxyContext()
-    {
-        
-    }
-    internal WlDisplay Display { get; set; }
-    internal WlEventQueue? Queue { get; set; }
-}
 
-public delegate WlProxy WlProxyFactory(WlProxyContext display, IntPtr handle, WlInterfaceDescription @interface, 
-    bool ownsHandle);
+
+public delegate WlProxy WlProxyFactory(WlProxyCreationContext context);
 
 public record WlProxyTypeDescriptor(WlInterfaceDescription Interface, Type ProxyType, WlProxyFactory Factory);
 

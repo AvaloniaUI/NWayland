@@ -59,8 +59,9 @@ namespace NWayland.Generator
             XmlElementSyntax summary = XmlElement("summary",
                 SingletonList<XmlNodeSyntax>(XmlText(TokenList(tokens))));
 
-            return member.WithLeadingTrivia(TriviaList(
-                Trivia(DocumentationComment(summary, XmlText("\n")))));
+            return member.WithLeadingTrivia(
+                Trivia(DocumentationComment(summary, XmlText("\r\n"))),
+                Comment("//CRLF"), EndOfLine("\r\n"));
         }
 
         private static LiteralExpressionSyntax MakeLiteralExpression(string literal)
@@ -73,6 +74,12 @@ namespace NWayland.Generator
             LiteralExpression(SyntaxKind.NullLiteralExpression, Token(SyntaxKind.NullKeyword));
 
         private string GetWlInterfaceTypeName(string wlTypeName) => _protocolFullNames[wlTypeName];
+        private string GetWlInterfaceTypeNameOrWlProxy(string? wlTypeName)
+        {
+            if (wlTypeName == null)
+                return "global::NWayland.WlProxy";
+            return _protocolFullNames[wlTypeName];
+        }
 
         private RefExpressionSyntax GetWlInterfaceRefFor(string wlTypeName)
             => RefExpression(
@@ -117,7 +124,7 @@ namespace NWayland.Generator
 
         private string? FindEnumTypeNameOverride(string protocol, string @interface, string message, string s) => null;
 
-        private string? GetTypeNameForArray(string protocolName, string interfaceName, string member, string argName)
+        private string GetTypeNameForArray(string protocolName, string interfaceName, string member, string argName)
         {
             foreach(var m in _arrayMappings)
                 if (m.Protocol == protocolName && m.Interface == interfaceName && m.Member == member &&

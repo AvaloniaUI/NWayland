@@ -61,7 +61,7 @@ public ref struct WaylandCallBuilder : IDisposable
     }
 
     // TODO: Queue management
-    public WlProxy InvokeNewId(WlProxyTypeDescriptor proxyType, IWlEventListener? listener, WlEventQueue? queue)
+    public WlProxy InvokeNewId(WlProxyTypeDescriptor proxyType, IWlEventsListener? listener, WlEventQueue? queue)
     {
         return _target.InvokeNewId(ref this, proxyType, listener, queue);
     }

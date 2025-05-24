@@ -6,17 +6,20 @@ namespace NWayland.Interop;
 
 public ref struct WlEventArgs
 {
-    internal WlEventArgsImpl Impl;
+    private WlEventArgsImpl _impl;
 
-    public int GetInt(int num) => Impl.Raw(num).Int32;
-    public uint GetUInt(int num) => Impl.Raw(num).UInt32;
-    public WlFixed GetFixed(int num) => Impl.Raw(num).WlFixed;
+    public WlProxy Sender => _impl.Sender;
+    public uint Opcode => _impl.Opcode;
+    
+    public int GetInt32(int num) => _impl.Raw(num).Int32;
+    public uint GetUInt32(int num) => _impl.Raw(num).UInt32;
+    public WlFixed GetWlFixed(int num) => _impl.Raw(num).WlFixed;
 
     public unsafe ReadOnlySpan<T> GetArray<T>(int num) where T : unmanaged
     {
-        if (Impl.Message.Arguments[num].Code != WaylandArgumentCodes.Array)
+        if (_impl.Message.Arguments[num].Code != WaylandArgumentCodes.Array)
             throw new InvalidOperationException();
-        var arr = (WlArray*)Impl.Arguments[num].IntPtr;
+        var arr = (WlArray*)_impl.Arguments[num].IntPtr;
         if (arr ==null)
             return default;
         return arr->AsSpan<T>();
@@ -24,15 +27,18 @@ public ref struct WlEventArgs
 
     public unsafe string? GetString(int num)
     {
-        if (Impl.Message.Arguments[num].Code != WaylandArgumentCodes.String)
+        if (_impl.Message.Arguments[num].Code != WaylandArgumentCodes.String)
             throw new InvalidOperationException();
-        var ptr = Impl.Arguments[num].IntPtr;
+        var ptr = _impl.Arguments[num].IntPtr;
         if (ptr == IntPtr.Zero)
             return null;
         return Marshal.PtrToStringUTF8(ptr);
     }
 
-    public T GetProxy<T>(int num) where T : WlProxy => Impl.GetProxy<T>(num);
+    public T GetProxy<T>(int num) where T : WlProxy => _impl.GetProxy<T>(num);
+    public NewId<T, TListener> GetNewId<T, TListener>(int num) where T : WlProxy where TListener : class, IWlEventsListener => _impl.GetNewId<T, TListener>(num);
+
+    internal WlEventArgs(WlEventArgsImpl impl) => _impl = impl;
 }
 
 unsafe class WlEventArgsImpl : IDisposable
@@ -40,15 +46,18 @@ unsafe class WlEventArgsImpl : IDisposable
     private readonly WlProxy _proxy;
     public WlMessageDescription Message { get; }
     public WlArgument* Arguments { get; }
+    public uint Opcode { get; }
+    public WlProxy Sender => _proxy;
+    private ulong _consumed;
 
-    public WlEventArgsImpl(WlArgument* arguments, WlProxy proxy, WlMessageDescription message)
+    public WlEventArgsImpl(WlArgument* arguments, WlProxy proxy, uint opcode)
     {
         Arguments = arguments;
+        Opcode = opcode;
         _proxy = proxy;
-        Message = message;
+        Message = proxy.Interface.Events[(int)opcode];
     }
 
-    // TODO: Reference proxies in advance and do something about new-id and consumption of those
     public T? GetProxy<T>(int num) where T : WlProxy
     {
         var proxyPtr = Raw(num).IntPtr;
@@ -60,17 +69,26 @@ unsafe class WlEventArgsImpl : IDisposable
         throw new InvalidOperationException();
     }
 
-    public NewId<T> GetNewId<T>(int num) where T : WlProxy
+    public NewId<T, TListener> GetNewId<T, TListener>(int num) where T : WlProxy where TListener : class, IWlEventsListener
+    {
+        return new NewId<T, TListener>(new(this, num));
+    }
+
+    public T GetNewIdProxy<T>(int num, IWlEventsListener? listener) where T : WlProxy => (T)GetNewIdProxy(num, listener);
+    WlProxy GetNewIdProxy(int num, IWlEventsListener? listener)
     {
         var proxyPtr = Raw(num).IntPtr;
+        var bit = 1ul << num;
+        if ((_consumed & bit) != 0)
+            throw new InvalidOperationException("Already consumed");
         if (Message.Arguments[num].Code == WaylandArgumentCodes.NewId)
         {
-            var proxy = (T)Message.Arguments[num].ProxyType?.Factory(new WlProxyContext
-            {
-                Display = _proxy.Display,
-                Queue = _proxy.Queue
-            }, proxyPtr, Message.Arguments[num].ProxyType!.Interface, true)!;
-            return new NewId<T>(new NewIdImpl<T>(proxy));
+            var proxy = Message.Arguments[num].ProxyType!.Factory(
+                new WlProxyCreationContext(_proxy.Display, _proxy.Queue,
+                    Message.Arguments[num].ProxyType!.Interface,
+                    proxyPtr, true, listener))!;
+            _consumed |= bit;
+            return proxy;
         }
         throw new InvalidOperationException();
     }
@@ -84,6 +102,14 @@ unsafe class WlEventArgsImpl : IDisposable
 
     public void Dispose()
     {
-         // TODO: "unlock" proxies
+        for (var c = 0; c < Message.Arguments.Count; c++)
+        {
+            if (Message.Arguments[c].Code == WaylandArgumentCodes.NewId)
+            {
+                var bit = 1ul << c;
+                if ((_consumed & bit) != 0) 
+                    GetNewIdProxy(c, null).Dispose();
+            }
+        }
     }
 }

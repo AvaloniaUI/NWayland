@@ -70,6 +70,21 @@ namespace NWayland.Generator
         }
 
         private WaylandProtocol? _currentProtocol;
+
+        Exception CreateError(string message, WaylandProtocolInterface iface, WaylandProtocolMessage? msg = null,
+            WaylandProtocolArgument? arg = null)
+        {
+            var m = iface + ":";
+            if (msg != null)
+            {
+                m += msg.Name + ":";
+                if (arg != null)
+                    m += arg.Name + ":";
+            }
+
+            m += " " + message;
+            return CreateError(m);
+        }
         Exception CreateError(string message)
         {
             if (_currentProtocol == null)
@@ -161,24 +176,15 @@ namespace NWayland.Generator
                     .WithParameterList(ParameterList(
                         SeparatedList(new[]
                         {
-                            Parameter(Identifier("context")).WithType(ParseTypeName("WlProxyContext")),
-                            Parameter(Identifier("handle")).WithType(ParseTypeName("IntPtr")),
-                            Parameter(Identifier("iface")).WithType(ParseTypeName("WlInterfaceDescription")),
-                            Parameter(Identifier("ownsHandle")).WithType(ParseTypeName("bool"))
+                            Parameter(Identifier("context")).WithType(ParseTypeName("WlProxyCreationContext")),
+
                         }))).WithBody(Block())
                     .WithInitializer(ConstructorInitializer(SyntaxKind.BaseConstructorInitializer,
                         ArgumentList(SeparatedList(new[]
                         {
                             Argument(IdentifierName("context")),
-                            Argument(IdentifierName("handle")),
-                            Argument(IdentifierName("iface")),
-                            Argument(IdentifierName("ownsHandle"))
                         })))));
-
-                cl = cl.AddMembers(ClassDeclaration("Listener").WithModifiers(TokenList(Token(SyntaxKind.PublicKeyword)))
-                    .AddBaseListTypes(SimpleBaseType(ParseTypeName("global::NWayland.Interop.IWlEventListener")))
-                );
-
+                
                 ns = ns.AddMembers(cl);
             }
 

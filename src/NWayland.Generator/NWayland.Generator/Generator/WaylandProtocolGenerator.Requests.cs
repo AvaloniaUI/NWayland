@@ -22,6 +22,7 @@ namespace NWayland.Generator
             var dotNetCtorType = ctorType is null ? "void" : GetWlInterfaceTypeName(ctorType);
 
             var method = MethodDeclaration(ParseTypeName(dotNetCtorType), Pascalize(request.Name));
+            method = WithSummary(method, request.Description);
             var parameters = new List<ParameterSyntax>();
 
             var callVar = VariableDeclaration(ParseTypeName("var"), SingletonSeparatedList(

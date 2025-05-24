@@ -1,11 +1,6 @@
 namespace NWayland.Interop;
 
-public interface IWlEventListener
+public interface IWlEventsListener
 {
-    
-}
-
-public class WlEvent
-{
-    
+    public void DispatchEvent(WlEventArgs args);
 }

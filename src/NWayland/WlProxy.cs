@@ -2,37 +2,65 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using NWayland.Interop;
+using NWayland.Protocols.Wayland;
 
-namespace NWayland.Protocols.Wayland
+namespace NWayland
 {
+    public class WlProxyCreationContext
+    {
+        //, IntPtr handle, WlInterfaceDescription @interface, bool ownsHandle = true
+        internal WlProxyCreationContext(WlDisplay display, WlEventQueue? queue, 
+            WlInterfaceDescription @interface, IntPtr handle, bool ownsHandle,
+            IWlEventsListener? listener)
+        {
+            Display = display;
+            Queue = queue;
+            Interface = @interface;
+            Handle = handle;
+            OwnsHandle = ownsHandle;
+            Listener = listener;
+        }
+        internal WlDisplay Display { get; set; }
+        internal WlEventQueue? Queue { get; set; }
+        internal WlInterfaceDescription Interface { get; }
+        internal IntPtr Handle { get; }
+        internal bool OwnsHandle { get; }
+        internal IWlEventsListener? Listener { get; }
+    }
+    
     public abstract unsafe class WlProxy : IDisposable
     {
         private readonly WlDisplay _display;
         private readonly WlInterfaceDescription _interface;
         private readonly uint _id;
         private bool _isDisposed;
+        private IWlEventsListener? _listener;
         private WlEventQueue? _queue;
         internal WlDisplay Display => _display;
         internal WlEventQueue? Queue => _queue;
 
-        protected WlProxy(WlProxyContext context, IntPtr handle, WlInterfaceDescription @interface, bool ownsHandle = true)
+        internal WlInterfaceDescription Interface => _interface;
+
+        protected WlProxy(WlProxyCreationContext context)
         {
-            if (!ownsHandle)
+            if (!context.OwnsHandle)
                 throw new NotSupportedException();
-            var display = context.Display;
+            _display = context.Display;
+            
+            _interface = context.Interface;
+            _listener = context.Listener;
+            Handle = context.Handle;
+            
             _queue = context.Queue;
             
-            if (display == null!)
+            if (_display == null!)
             {
                 if (this is WlDisplay)
-                    display = (WlDisplay)this;
+                    _display = (WlDisplay)this;
                 else
-                    throw new ArgumentNullException(nameof(display));
+                    throw new ArgumentNullException("display");
             }
-            _display = display;
-            _interface = @interface;
-            Version = LibWayland.wl_proxy_get_version(handle);
-            Handle = handle;
+            Version = LibWayland.wl_proxy_get_version(Handle);
             if (this is WlDisplay)
                 return;
             // TODO: adjust
@@ -54,9 +82,7 @@ namespace NWayland.Protocols.Wayland
         public IntPtr Handle { get; }
 
         protected abstract WlInterface* GetWlInterface();
-
-        protected abstract void DispatchEvent(uint opcode, WlArgument* arguments);
-
+        
         internal void DispatchEvent(uint opcode, ref WlMessage message, WlArgument* arguments)
         {
             // Sanity checks
@@ -69,7 +95,8 @@ namespace NWayland.Protocols.Wayland
                 return;
             if(!strcmp(protocolMsg.Signature, message.Signature))
                 return;
-            DispatchEvent(opcode, arguments);
+            
+            using var args = new WlEventArgsImpl(arguments, this, opcode);
         }
         
         public void Dispose()
@@ -101,16 +128,12 @@ namespace NWayland.Protocols.Wayland
         }
 
         private unsafe WlProxy? InvokeCore(ref WaylandCallBuilder call, WlProxyTypeDescriptor? proxyType,
-            IWlEventListener? listener, WlEventQueue? queue)
+            IWlEventsListener? listener, WlEventQueue? queue)
         {
             var method = this._interface.Methods[(int)call.OpCode];
             if (method.SinceVersion > Version)
                 throw new InvalidOperationException(
                     $"Method {method.Name} is not supported for interface version {Version}");
-
-            if (proxyType != null && listener == null && proxyType.Interface.Events.Count > 0)
-                throw new InvalidOperationException(
-                    "It's mandatory to pass a listener to an interface containing events");
             
             lock (_display.SyncRoot)
             {
@@ -166,11 +189,9 @@ namespace NWayland.Protocols.Wayland
                         proxyType != null ? proxyType.Interface.GetNative() : null, (uint)Version, flags, args);
 
                     if (proxyType != null)
-                        return proxyType.Factory(new WlProxyContext()
-                        {
-                            Display = _display,
-                            Queue = queue ?? _queue
-                        }, rv, proxyType.Interface, true);
+                        return proxyType.Factory(new WlProxyCreationContext(
+                            _display, queue ?? _queue,
+                            proxyType.Interface, rv, true, listener));
 
                     return null;
                 }
@@ -188,7 +209,7 @@ namespace NWayland.Protocols.Wayland
             InvokeCore(ref call, null, null, null);
         }
 
-        public unsafe WlProxy InvokeNewId(ref WaylandCallBuilder call, WlProxyTypeDescriptor proxyType, IWlEventListener? listener, WlEventQueue? queue)
+        public unsafe WlProxy InvokeNewId(ref WaylandCallBuilder call, WlProxyTypeDescriptor proxyType, IWlEventsListener? listener, WlEventQueue? queue)
         {
             if (proxyType == null || listener == null)
                 throw new ArgumentNullException();
