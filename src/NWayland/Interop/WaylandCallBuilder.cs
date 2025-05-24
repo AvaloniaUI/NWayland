@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using NWayland.Protocols.Wayland;
 
 namespace NWayland.Interop;
@@ -49,10 +50,9 @@ public ref struct WaylandCallBuilder : IDisposable
         WlFixed = wlFixed
     });
 
-    public void Arg(ReadOnlySpan<byte> array)
+    public void Arg<T>(ReadOnlySpan<T> array) where T : unmanaged
     {
-        //TODO
-        throw new NotSupportedException();
+        ObjectArg(MemoryMarshal.Cast<T, byte>(array).ToArray());
     }
 
     public void Invoke()

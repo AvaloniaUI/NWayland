@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using NWayland.Interop;
 using NWayland.Protocols.Wayland;
@@ -122,21 +123,22 @@ namespace NWayland
             if (method.SinceVersion > Version)
                 throw new InvalidOperationException(
                     $"Method {method.Name} is not supported for interface version {Version}");
-            
+
             lock (_display.SyncRoot)
             {
                 if (_isDisposed)
                     throw new ObjectDisposedException(this.GetType().FullName);
                 WlArgument* args = stackalloc WlArgument[call.NormalArgs?.Count ?? 0 + call.ObjectArgs?.Count ?? 0];
                 int normalIndex = 0, objIndex = 0;
-                List<IntPtr>? toDealloc = null; // TODO: pool
-                IntPtr? wrapper = null; 
+                List<(IntPtr ptr, bool gcHandle)>? toDealloc = null; // TODO: pool
+                IntPtr? wrapper = null;
                 try
                 {
                     for (var c = 0; c < method.Arguments.Count; c++)
                     {
                         var arg = method.Arguments[c];
-                        if (arg.Code is WaylandArgumentCodes.Object or WaylandArgumentCodes.String)
+                        if (arg.Code is WaylandArgumentCodes.Object or WaylandArgumentCodes.String
+                            or WaylandArgumentCodes.Array)
                         {
                             var objArg = call.ObjectArgs[objIndex];
                             objIndex++;
@@ -149,7 +151,7 @@ namespace NWayland
                                     throw new ObjectDisposedException(objArg.GetType().FullName);
                                 args[c] = proxyArg;
                             }
-                            else
+                            else if (arg.Code is WaylandArgumentCodes.String)
                             {
                                 var s = (string?)objArg;
                                 if (s == null)
@@ -157,9 +159,20 @@ namespace NWayland
                                 else
                                 {
                                     var ptr = Marshal.StringToHGlobalAnsi(s);
-                                    (toDealloc ??= new()).Add(ptr);
+                                    (toDealloc ??= new()).Add((ptr, false));
                                     args[c] = ptr;
                                 }
+                            }
+                            else
+                            {
+                                var arr = (byte[])objArg!;
+                                var handle = GCHandle.Alloc(arr, GCHandleType.Pinned);
+                                (toDealloc ??= new()).Add((GCHandle.ToIntPtr(handle), true));
+                                var wlArrayPtr = (WlArray*)Marshal.AllocHGlobal(Unsafe.SizeOf<WlArray>());
+                                *wlArrayPtr = WlArray.FromPointer<byte>((byte*)handle.AddrOfPinnedObject(), arr.Length);
+                                toDealloc.Add(((IntPtr)wlArrayPtr, false));
+
+                                args[c] = wlArrayPtr;
                             }
                         }
                         // TODO: Array
@@ -171,13 +184,13 @@ namespace NWayland
                     }
 
                     var flags = method.IsDestructor ? LibWayland.WlProxyMarshalFlags.Destroy : default;
-                    
+
                     if (proxyType != null && queue != null)
                     {
                         wrapper = LibWayland.wl_proxy_create_wrapper(Handle);
                         LibWayland.wl_proxy_set_queue(wrapper.Value, queue.Handle);
                     }
-                    
+
                     // TODO: Verify that constructed entity is from the same protocol,
                     // otherwise where are we going to get a version
                     var rv = LibWayland.wl_proxy_marshal_array_flags(Handle, call.OpCode,
@@ -194,9 +207,14 @@ namespace NWayland
                 {
                     if (wrapper.HasValue)
                         LibWayland.wl_proxy_wrapper_destroy(wrapper.Value);
-                    if(toDealloc != null)
-                        foreach (var ptr in toDealloc)
-                            Marshal.FreeHGlobal(ptr);
+                    if (toDealloc != null)
+                        foreach (var entry in toDealloc)
+                        {
+                            if (entry.gcHandle)
+                                GCHandle.FromIntPtr(entry.ptr).Free();
+                            else
+                                Marshal.FreeHGlobal(entry.ptr);
+                        }
                 }
             }
         }

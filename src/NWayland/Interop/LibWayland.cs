@@ -255,7 +255,7 @@ namespace NWayland.Interop
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    unsafe readonly ref struct WlArray
+    readonly unsafe struct WlArray
     {
         public readonly IntPtr Size;
         public readonly IntPtr Alloc;
