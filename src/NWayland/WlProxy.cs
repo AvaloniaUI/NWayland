@@ -6,28 +6,6 @@ using NWayland.Protocols.Wayland;
 
 namespace NWayland
 {
-    public class WlProxyCreationContext
-    {
-        //, IntPtr handle, WlInterfaceDescription @interface, bool ownsHandle = true
-        internal WlProxyCreationContext(WlDisplay display, WlEventQueue? queue, 
-            WlInterfaceDescription @interface, IntPtr handle, bool ownsHandle,
-            IWlEventsListener? listener)
-        {
-            Display = display;
-            Queue = queue;
-            Interface = @interface;
-            Handle = handle;
-            OwnsHandle = ownsHandle;
-            Listener = listener;
-        }
-        internal WlDisplay Display { get; set; }
-        internal WlEventQueue? Queue { get; set; }
-        internal WlInterfaceDescription Interface { get; }
-        internal IntPtr Handle { get; }
-        internal bool OwnsHandle { get; }
-        internal IWlEventsListener? Listener { get; }
-    }
-    
     public abstract unsafe class WlProxy : IDisposable
     {
         private readonly WlDisplay _display;
@@ -113,8 +91,6 @@ namespace NWayland
             LibWayland.wl_proxy_destroy(Handle);
             _isDisposed = true;
         }
-
-        protected static T? FromNative<T>(IntPtr proxy) where T : WlProxy => proxy == IntPtr.Zero ? null : LibWayland.FindByNative(proxy) as T;
 
         private static bool strcmp(string left, byte* right)
         {
@@ -213,12 +189,12 @@ namespace NWayland
             }
         }
 
-        public unsafe void Invoke(ref WaylandCallBuilder call)
+        internal void Invoke(ref WaylandCallBuilder call)
         {
             InvokeCore(ref call, null, null, null);
         }
 
-        public unsafe WlProxy InvokeNewId(ref WaylandCallBuilder call, WlProxyTypeDescriptor proxyType, IWlEventsListener? listener, WlEventQueue? queue)
+        internal WlProxy InvokeNewId(ref WaylandCallBuilder call, WlProxyTypeDescriptor proxyType, IWlEventsListener? listener, WlEventQueue? queue)
         {
             if (proxyType == null || listener == null)
                 throw new ArgumentNullException();

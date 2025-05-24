@@ -160,7 +160,7 @@ namespace NWayland.Interop
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public unsafe struct WlMessage
+    unsafe struct WlMessage
     {
         public readonly byte* Name;
         public readonly byte* Signature;
@@ -180,7 +180,7 @@ namespace NWayland.Interop
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public unsafe struct WlInterface
+    unsafe struct WlInterface
     {
         public readonly IntPtr Name;
         public readonly int Version;
@@ -217,7 +217,7 @@ namespace NWayland.Interop
     }
 
     [StructLayout(LayoutKind.Explicit)]
-    public unsafe struct WlArgument
+    unsafe struct WlArgument
     {
         [FieldOffset(0)]
         public int Int32;
@@ -249,7 +249,7 @@ namespace NWayland.Interop
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public unsafe readonly ref struct WlArray
+    unsafe readonly ref struct WlArray
     {
         public readonly IntPtr Size;
         public readonly IntPtr Alloc;

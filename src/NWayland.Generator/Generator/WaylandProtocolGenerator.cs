@@ -63,7 +63,7 @@ namespace NWayland.Generator
             var attributes = new StringBuilder();
             foreach (var iface in gen._internalProtocolFullNames)
             {
-                attributes.AppendLine($"[assembly:global::NWayland.NWaylandInterfaceToProxyNameMappingAttribute(\"{iface.Key}\", typeof({iface.Value}))]");
+                attributes.AppendLine($"[assembly:global::NWayland.Interop.Metadata.NWaylandInterfaceToProxyNameMappingAttribute(\"{iface.Key}\", typeof({iface.Value}))]");
             }
 
             addSource("__generated-proxy-map", attributes.ToString());
@@ -173,7 +173,7 @@ namespace NWayland.Generator
                     .WithParameterList(ParameterList(
                         SeparatedList(new[]
                         {
-                            Parameter(Identifier("context")).WithType(ParseTypeName("WlProxyCreationContext")),
+                            Parameter(Identifier("context")).WithType(ParseTypeName("global::NWayland.Interop.WlProxyCreationContext")),
 
                         }))).WithBody(Block())
                     .WithInitializer(ConstructorInitializer(SyntaxKind.BaseConstructorInitializer,

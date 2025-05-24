@@ -50,7 +50,7 @@ public class NWaylandRoslynGenerator : IIncrementalGenerator
                 continue;
             foreach (var attr in attrs)
             {
-                if (attr.AttributeClass?.ToString() == "NWayland.NWaylandInterfaceToProxyNameMappingAttribute")
+                if (attr.AttributeClass?.ToString() == "NWayland.Interop.Metadata.NWaylandInterfaceToProxyNameMappingAttribute")
                     rv.Add(new NwgExternalTypeMapping(attr.ConstructorArguments[0].Value.ToString(),
                         attr.ConstructorArguments[1].Value.ToString()));
             }

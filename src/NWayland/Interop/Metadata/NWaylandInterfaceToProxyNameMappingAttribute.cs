@@ -1,6 +1,6 @@
 using System;
 
-namespace NWayland;
+namespace NWayland.Interop.Metadata;
 
 [AttributeUsage(AttributeTargets.Assembly, AllowMultiple = true)]
 public class NWaylandInterfaceToProxyNameMappingAttribute : Attribute
