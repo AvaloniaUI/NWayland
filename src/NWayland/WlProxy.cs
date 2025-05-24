@@ -115,6 +115,9 @@ namespace NWayland
         private unsafe WlProxy? InvokeCore(ref WaylandCallBuilder call, WlProxyTypeDescriptor? proxyType,
             IWlEventsListener? listener, WlEventQueue? queue)
         {
+            if (_isDisposed)
+                throw new ObjectDisposedException(GetType().FullName);
+            
             var method = this._interface.Methods[(int)call.OpCode];
             if (method.SinceVersion > Version)
                 throw new InvalidOperationException(
@@ -127,6 +130,7 @@ namespace NWayland
                 WlArgument* args = stackalloc WlArgument[call.NormalArgs?.Count ?? 0 + call.ObjectArgs?.Count ?? 0];
                 int normalIndex = 0, objIndex = 0;
                 List<IntPtr>? toDealloc = null; // TODO: pool
+                IntPtr? wrapper = null; 
                 try
                 {
                     for (var c = 0; c < method.Arguments.Count; c++)
@@ -167,7 +171,13 @@ namespace NWayland
                     }
 
                     var flags = method.IsDestructor ? LibWayland.WlProxyMarshalFlags.Destroy : default;
-
+                    
+                    if (proxyType != null && queue != null)
+                    {
+                        wrapper = LibWayland.wl_proxy_create_wrapper(Handle);
+                        LibWayland.wl_proxy_set_queue(wrapper.Value, queue.Handle);
+                    }
+                    
                     // TODO: Verify that constructed entity is from the same protocol,
                     // otherwise where are we going to get a version
                     var rv = LibWayland.wl_proxy_marshal_array_flags(Handle, call.OpCode,
@@ -182,6 +192,8 @@ namespace NWayland
                 }
                 finally
                 {
+                    if (wrapper.HasValue)
+                        LibWayland.wl_proxy_wrapper_destroy(wrapper.Value);
                     if(toDealloc != null)
                         foreach (var ptr in toDealloc)
                             Marshal.FreeHGlobal(ptr);

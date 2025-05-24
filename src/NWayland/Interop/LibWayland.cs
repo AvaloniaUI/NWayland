@@ -93,6 +93,12 @@ namespace NWayland.Interop
         [DllImport(Wayland, ExactSpelling = true)]
         internal static extern void wl_proxy_set_queue(IntPtr proxy, IntPtr queue);
 
+        [DllImport(Wayland, ExactSpelling = true)]
+        internal static extern IntPtr wl_proxy_create_wrapper(IntPtr proxy);
+
+        [DllImport(Wayland, ExactSpelling = true)]
+        internal static extern void wl_proxy_wrapper_destroy(IntPtr proxy_wrapper);
+
         private delegate int WlProxyDispatcherDelegate(IntPtr implementation, IntPtr target, uint opcode, ref WlMessage message, WlArgument* argument);
 
         private static readonly Dictionary<uint, WeakReference<WlProxy>> _proxies = new();
