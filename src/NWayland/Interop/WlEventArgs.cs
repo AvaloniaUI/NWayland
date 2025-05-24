@@ -50,12 +50,12 @@ unsafe class WlEventArgsImpl : IDisposable
     public WlProxy Sender => _proxy;
     private ulong _consumed;
 
-    public WlEventArgsImpl(WlArgument* arguments, WlProxy proxy, uint opcode)
+    public WlEventArgsImpl(WlArgument* arguments, WlProxy proxy, uint opcode, WlMessageDescription message)
     {
         Arguments = arguments;
         Opcode = opcode;
         _proxy = proxy;
-        Message = proxy.Interface.Events[(int)opcode];
+        Message = message;
     }
 
     public T? GetProxy<T>(int num) where T : WlProxy

@@ -80,23 +80,23 @@ namespace NWayland
         public int Version { get; }
 
         public IntPtr Handle { get; }
-
-        protected abstract WlInterface* GetWlInterface();
         
-        internal void DispatchEvent(uint opcode, ref WlMessage message, WlArgument* arguments)
+        internal void DispatchEvent(uint opcode, ref WlMessage nativeMessage, WlArgument* arguments)
         {
             // Sanity checks
             // TODO: trigger a warning or something if this happens for some weird reason
-            var @interface = GetWlInterface();
-            if (opcode >= @interface->EventCount)
+
+
+            if (opcode >= Interface.Events.Count)
                 return;
-            var protocolMsg = @interface->Events[opcode];
-            if(!strcmp(protocolMsg.Name, message.Name))
+            var message = Interface.Events[(int)opcode];
+            if(!strcmp(message.Name, nativeMessage.Name))
                 return;
-            if(!strcmp(protocolMsg.Signature, message.Signature))
+            if(!strcmp(message.Signature, nativeMessage.Signature))
                 return;
             
-            using var args = new WlEventArgsImpl(arguments, this, opcode);
+            using var args = new WlEventArgsImpl(arguments, this, opcode, message);
+            _listener?.DispatchEvent(new (args));
         }
         
         public void Dispose()
@@ -116,14 +116,23 @@ namespace NWayland
 
         protected static T? FromNative<T>(IntPtr proxy) where T : WlProxy => proxy == IntPtr.Zero ? null : LibWayland.FindByNative(proxy) as T;
 
-        private static bool strcmp(byte* left, byte* right)
+        private static bool strcmp(string left, byte* right)
         {
             for (var c = 0;; c++)
             {
+                if (left.Length <= c)
+                {
+                    // Check if we've reached the end of native string as well
+                    return right[c] == 0;
+                }
+                
+                // Reached the end of native before managed
+                if (right[c] == 0)
+                    return false;
+                
+                // Character mismatch
                 if (left[c] != right[c])
                     return false;
-                if (left[c] == 0)
-                    return true;
             }
         }
 
@@ -139,7 +148,7 @@ namespace NWayland
             {
                 if (_isDisposed)
                     throw new ObjectDisposedException(this.GetType().FullName);
-                WlArgument* args = stackalloc WlArgument[call.NormalArgs.Count + call.ObjectArgs.Count];
+                WlArgument* args = stackalloc WlArgument[call.NormalArgs?.Count ?? 0 + call.ObjectArgs?.Count ?? 0];
                 int normalIndex = 0, objIndex = 0;
                 List<IntPtr>? toDealloc = null; // TODO: pool
                 try

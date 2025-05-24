@@ -5,103 +5,13 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
+using Parameter = System.Reflection.Metadata.Parameter;
 
 namespace NWayland.Generator
 {
     partial class WaylandProtocolGenerator
     {
-        private ObjectCreationExpressionSyntax GenerateWlMessage(WaylandProtocolMessage msg)
-        {
-            var signature = new StringBuilder();
-            if (msg.Since != 0)
-                signature.Append(msg.Since);
-            var interfaceList = new SeparatedSyntaxList<ExpressionSyntax>();
-            if (msg.Arguments is not null)
-                foreach (var arg in msg.Arguments)
-                {
-                    if (arg.AllowNull)
-                        signature.Append('?');
-                    if (arg.Type == WaylandArgumentTypes.NewId && arg.Interface is null)
-                    {
-                        signature.Append("su");
-                        interfaceList = interfaceList.AddRange(new[] { MakeNullLiteralExpression(), MakeNullLiteralExpression() });
-                    }
-
-                    signature.Append(WaylandArgumentTypes.NamesToCodes[arg.Type]);
-                    if (arg.Interface is not null)
-                        interfaceList = interfaceList.Add(
-                            GetWlInterfaceAddressFor(arg.Interface));
-                    else
-                        interfaceList = interfaceList.Add(MakeNullLiteralExpression());
-                }
-
-            var argList = ArgumentList(SeparatedList(new[]
-            {
-                Argument(MakeLiteralExpression(msg.Name)),
-                Argument(MakeLiteralExpression(signature.ToString())),
-                Argument(ArrayCreationExpression(ArrayType(ParseTypeName("WlInterface*[]")))
-                    .WithInitializer(InitializerExpression(SyntaxKind.ArrayInitializerExpression,
-                        interfaceList)))
-
-            }));
-
-            return ObjectCreationExpression(ParseTypeName("WlMessage"), argList, null)
-                .WithLeadingTrivia(CarriageReturn);
-        }
-
-        private ArgumentSyntax GenerateWlMessageList(in WaylandProtocolMessage[] messages)
-        {
-            var elements = new SeparatedSyntaxList<ExpressionSyntax>();
-            foreach (var msg in messages)
-                elements = elements.Add(GenerateWlMessage(msg));
-            return Argument(ArrayCreationExpression(ArrayType(ParseTypeName("WlMessage[]")), InitializerExpression(
-                SyntaxKind.ArrayInitializerExpression,
-                elements)));
-        }
-
-        private ClassDeclarationSyntax WithSignature(ClassDeclarationSyntax cl, WaylandProtocolInterface @interface)
-        {
-            var attr = AttributeList(SingletonSeparatedList(
-                Attribute(
-                    IdentifierName("FixedAddressValueType"))
-            )).NormalizeWhitespace();
-            var sigField = FieldDeclaration(new SyntaxList<AttributeListSyntax>(
-                    new[] {attr}),
-                new SyntaxTokenList(Token(SyntaxKind.PublicKeyword), Token(SyntaxKind.StaticKeyword)),
-                VariableDeclaration(ParseTypeName("WlInterface"))
-                    .AddVariables(VariableDeclarator("WlInterface")));
-            cl = cl.AddMembers(sigField);
-
-            var staticCtor = ConstructorDeclaration(cl.Identifier)
-                .AddModifiers(Token(SyntaxKind.StaticKeyword));
-
-            var args = ArgumentList(SeparatedList(new[]
-                {
-                    Argument(MakeLiteralExpression(@interface.Name)),
-                    Argument(MakeLiteralExpression(@interface.Version)),
-                    GenerateWlMessageList(@interface.Requests?.Cast<WaylandProtocolMessage>().ToArray() ?? Array.Empty<WaylandProtocolMessage>()),
-                    GenerateWlMessageList(@interface.Events ?? Array.Empty<WaylandProtocolMessage>())
-                }
-            ));
-
-            staticCtor = staticCtor.AddBodyStatements(
-                ExpressionStatement(AssignmentExpression(SyntaxKind.SimpleAssignmentExpression,
-                    MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, IdentifierName(GetWlInterfaceTypeName(@interface.Name)), IdentifierName("WlInterface")),
-                    ObjectCreationExpression(ParseTypeName("WlInterface"), args, null)
-                ))
-            );
-
-            cl = cl.AddMembers(staticCtor);
-
-            cl = cl.AddMembers(MethodDeclaration(ParseTypeName("WlInterface*"), "GetWlInterface")
-                .WithModifiers(TokenList(Token(SyntaxKind.ProtectedKeyword), Token(SyntaxKind.OverrideKeyword)))
-                .WithBody(Block(ReturnStatement(GetWlInterfaceAddressFor(@interface.Name)))));
-            cl = WithSignature2(cl, @interface, staticCtor);
-            return cl;
-        }
-        
-        
-        private ExpressionSyntax GenerateWlMessage2(WaylandProtocolMessage msg)
+        private ExpressionSyntax GenerateWlMessage(WaylandProtocolMessage msg)
         {
             var message =
                 InvokeMemberCrLf(IdentifierName("global::NWayland.Interop.WlMessageDescription"),
@@ -163,31 +73,29 @@ namespace NWayland.Generator
             
         }
         
-        private ExpressionSyntax GenerateWlMessageList2(ExpressionSyntax builder, bool events, in WaylandProtocolMessage[]? messages)
+        private ExpressionSyntax GenerateWlMessageList(ExpressionSyntax builder, bool events, in WaylandProtocolMessage[]? messages)
         {
             if (messages == null)
                 return builder;
             var name = events ? "AddEvent" : "AddMethod";
             foreach (var m in messages)
-                builder = InvokeMemberCrLf(builder, name, GenerateWlMessage2(m));
+                builder = InvokeMemberCrLf(builder, name, GenerateWlMessage(m));
 
             return builder;
         }
         
-        
-        private ClassDeclarationSyntax WithSignature2(ClassDeclarationSyntax cl, WaylandProtocolInterface iface, ConstructorDeclarationSyntax ctor)
+        private ClassDeclarationSyntax WithSignature(ClassDeclarationSyntax cl, WaylandProtocolInterface iface)
         {
             var builder = (ExpressionSyntax)InvokeMemberCrLf(
                     IdentifierName("global::NWayland.Interop.WlInterfaceDescription"),
                     "Create", MakeLiteralExpression(iface.Name), MakeLiteralExpression(iface.Version))
                 .CrLfPrefix();
 
-            builder = GenerateWlMessageList2(builder, false, iface.Requests);
-            builder = GenerateWlMessageList2(builder, true, iface.Events);
+            builder = GenerateWlMessageList(builder, false, iface.Requests);
+            builder = GenerateWlMessageList(builder, true, iface.Events);
 
             var built = InvokeMemberCrLf(builder, "Build");
-
-
+            
             var descriptorType = ParseTypeName("global::NWayland.Interop.WlProxyTypeDescriptor");
             var descriptor = ObjectCreationExpression(descriptorType,
                 ArgumentList(SeparatedList(
@@ -203,7 +111,7 @@ namespace NWayland.Generator
                     ))
                 ])), null);
 
-            return cl.AddMembers(PropertyDeclaration(descriptorType, "ProxyType")
+            cl = cl.AddMembers(PropertyDeclaration(descriptorType, "ProxyType")
                     .WithModifiers(TokenList(Token(SyntaxKind.PublicKeyword), Token(SyntaxKind.StaticKeyword)))
                     .WithAccessorList(AccessorList(List(new[]
                     {
@@ -211,21 +119,47 @@ namespace NWayland.Generator
                             .WithSemicolonToken(Semicolon()),
                     }))).WithInitializer(EqualsValueClause(descriptor)).WithSemicolonToken(Semicolon()));
 
-            //public record WlProxyTypeDescriptor(WlInterfaceDescription Interface, Type ProxyType, WlProxyFactory Factory);
+            return WithBindMethod(cl, iface);
+        }
 
-            /*cl.AddMembers(PropertyDeclaration(NullableType(ParseTypeName("IEvents")), "Events")
-               .WithModifiers(TokenList(Token(SyntaxKind.PublicKeyword)))
-               .WithAccessorList(AccessorList(List(new[]
-               {
-                   AccessorDeclaration(SyntaxKind.GetAccessorDeclaration)
-                       .WithSemicolonToken(Semicolon()),
-                   AccessorDeclaration(SyntaxKind.SetAccessorDeclaration)
-                       .WithSemicolonToken(Semicolon())
-               })))*/
+        private ClassDeclarationSyntax WithBindMethod(ClassDeclarationSyntax cl, WaylandProtocolInterface iface)
+        {
+            if (iface.Name is "wl_display" or "wl_registry")
+                return cl;
+            var proxyTypeName = GetWlInterfaceTypeName(iface.Name);
+            var proxyType = ParseTypeName(proxyTypeName);
 
-            //cl.WithMembers(PropertyDeclaration())
+            return cl.AddMembers(
+                MethodDeclaration(proxyType, "Bind")
+                    .WithModifiers(TokenList(Token(SyntaxKind.PublicKeyword), Token(SyntaxKind.StaticKeyword)))
+                    .WithParameterList(ParameterList(SeparatedList(
+                        [
+                            Parameter(Identifier("registry"))
+                                .WithType(ParseTypeName("global::NWayland.Protocols.Wayland.WlRegistry")),
+                            Parameter(Identifier("name"))
+                                .WithType(ParseTypeName("uint")),
+                            Parameter(Identifier("version"))
+                                .WithType(ParseTypeName("int")),
+                            Parameter(Identifier("eventsListener"))
+                                .WithType(ParseTypeName(proxyTypeName + ".Listener?"))
+                                .WithDefault(EqualsValueClause(MakeNullLiteralExpression())),
+                            Parameter(Identifier("dispatchOnQueue"))
+                                .WithType(ParseTypeName("global::NWayland.WlEventQueue?"))
+                                .WithDefault(EqualsValueClause(MakeNullLiteralExpression()))
 
-            //cl.ReplaceNode(ctor, ctor.AddBodyStatements())
+                        ]
+                    )))
+                    .WithExpressionBody(ArrowExpressionClause(
+                            InvokeMember(IdentifierName("registry"), "Bind<" + proxyTypeName + ">",
+                                IdentifierName("name"),
+                                IdentifierName("ProxyType"),
+                                IdentifierName("version"),
+                                IdentifierName("eventsListener"),
+                                IdentifierName("dispatchOnQueue")
+                                
+                                ).CrLfPrefix())).WithSemicolonToken(Semicolon()).CrLfPrefix()
+
+                    );
         }
     }
 }

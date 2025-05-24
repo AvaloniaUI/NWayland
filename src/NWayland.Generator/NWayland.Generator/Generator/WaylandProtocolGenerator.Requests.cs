@@ -21,7 +21,8 @@ namespace NWayland.Generator
             var ctorType = newIdArgument?.Interface;
             var dotNetCtorType = ctorType is null ? "void" : GetWlInterfaceTypeName(ctorType);
 
-            var method = MethodDeclaration(ParseTypeName(dotNetCtorType), Pascalize(request.Name));
+            var method = MethodDeclaration(ParseTypeName(dotNetCtorType), Pascalize(request.Name))
+                .WithModifiers(TokenList(Token(SyntaxKind.PublicKeyword)));
             method = WithSummary(method, request.Description);
             var parameters = new List<ParameterSyntax>();
 
@@ -82,18 +83,17 @@ namespace NWayland.Generator
                 }
             }
 
-            bool hasListener = false;
             if (newIdArgument != null)
             {
-                if (@interface.Events != null && @interface.Events.Length > 0)
-                {
-                    parameters.Add(Parameter(Identifier("eventsListener"))
-                        .WithType(ParseTypeName(GetWlInterfaceTypeName(newIdArgument.Interface!) + ".Listener")));
-                    hasListener = true;
-                }
+                parameters.Add(Parameter(Identifier("eventsListener"))
+                    .WithType(ParseTypeName(GetWlInterfaceTypeName(newIdArgument.Interface!) + ".Listener?"))
+                    .WithDefault(EqualsValueClause(MakeNullLiteralExpression()))
+                );
 
                 parameters.Add(Parameter(Identifier("dispatchOnQueue"))
-                    .WithType(ParseTypeName("global::NWayland.WlEventQueue?")));
+                    .WithType(ParseTypeName("global::NWayland.WlEventQueue?"))
+                    .WithDefault(EqualsValueClause(MakeNullLiteralExpression()))
+                );
             }
 
             if (newIdArgument != null)
@@ -101,7 +101,7 @@ namespace NWayland.Generator
                     CastExpression(ParseTypeName(GetWlInterfaceTypeName(newIdArgument.Interface!)),
                         InvokeMember(callId, "InvokeNewId",
                             MemberAccess(IdentifierName(GetWlInterfaceTypeName(newIdArgument.Interface!)), "ProxyType"),
-                            hasListener ? IdentifierName("eventsListener") : MakeNullLiteralExpression(),
+                            IdentifierName("eventsListener"),
                             IdentifierName("dispatchOnQueue")
                         ))));
             else

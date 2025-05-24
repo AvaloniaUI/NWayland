@@ -62,6 +62,7 @@ public unsafe class WlInterfaceDescription
 public class WlMessageDescription
 {
     public string Name { get; private set; }
+    public string Signature { get; private set; }
     public bool IsDestructor { get; private set; }
     public int SinceVersion { get; private set; }
     public IReadOnlyList<WlMessageArgumentDescription> Arguments { get; private set; }
@@ -73,14 +74,16 @@ public class WlMessageDescription
     {
         if (_nativeCache != null)
             return _nativeCache.Value;
-        var sig = "";
         var types = new List<IntPtr>();
         foreach (var arg in Arguments)
         {
-            sig += arg;
             if (arg.Code is WaylandArgumentCodes.NewId or WaylandArgumentCodes.Object)
             {
-                types.Add((IntPtr)arg.ProxyType!.Interface.GetNative());
+                var ntype = IntPtr.Zero;
+                if (arg.ProxyType != null)
+                    ntype = (IntPtr)arg.ProxyType.Interface.GetNative();
+                
+                types.Add(ntype);
             }
         }
 
@@ -90,7 +93,7 @@ public class WlMessageDescription
             typesArr![c] = (WlInterface*)types[c];
         }
         
-        _nativeCache = new WlMessage(Name, sig, typesArr);
+        _nativeCache = new WlMessage(Name, Signature, typesArr);
         return _nativeCache.Value;
     }
     
@@ -125,13 +128,12 @@ public class WlMessageDescription
                 Name = Name,
                 Arguments = _args.ToList(),
                 IsDestructor = _isDestructor,
-                SinceVersion = _sinceVersion
+                SinceVersion = _sinceVersion,
+                Signature = string.Join("", _args.Select(x => (char)x.Code))
             };
         }
     }
 }
-
-
 
 public delegate WlProxy WlProxyFactory(WlProxyCreationContext context);
 

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -9,6 +10,51 @@ namespace NWayland.Generator
 {
     partial class WaylandProtocolGenerator
     {
+        private ClassDeclarationSyntax GenerateDelegatingClass(ClassDeclarationSyntax baseClass, string name, string fullBaseClassName)
+        {
+            var cl = ClassDeclaration(name)
+                .AddBaseListTypes(SimpleBaseType(ParseTypeName(fullBaseClassName)))
+                .WithModifiers(TokenList(Token(SyntaxKind.PublicKeyword), Token(SyntaxKind.SealedKeyword)));
+
+            foreach (var m in baseClass.Members.OfType<MethodDeclarationSyntax>())
+            {
+                var methodName = m.Identifier.ToString();
+                if (methodName.Contains("."))
+                    continue;
+                
+                var delegateName = methodName + "Delegate";
+                var propName = "On" + methodName;
+                cl = cl.AddMembers(DelegateDeclaration(ParseTypeName("void"), delegateName)
+                    .WithModifiers(TokenList(Token(SyntaxKind.PublicKeyword)))
+                    .WithParameterList(m.ParameterList));
+
+                cl = cl.AddMembers(PropertyDeclaration(ParseTypeName(delegateName + "?"), propName)
+                        .WithModifiers(TokenList(Token(SyntaxKind.PublicKeyword)))
+                        .WithAccessorList(AccessorList(List([
+                            AccessorDeclaration(SyntaxKind.GetAccessorDeclaration)
+                                .WithSemicolonToken(Semicolon()),
+                            AccessorDeclaration(SyntaxKind.InitAccessorDeclaration)
+                                .WithSemicolonToken(Semicolon())
+                        ]))))
+                    .WithLeadingTrivia(m.GetLeadingTrivia());
+                cl = cl.AddMembers(MethodDeclaration(m.ReturnType, m.Identifier)
+                    .WithModifiers(TokenList(Token(SyntaxKind.ProtectedKeyword), Token(SyntaxKind.OverrideKeyword)))
+                    .WithParameterList(m.ParameterList)
+                    .WithExpressionBody(ArrowExpressionClause(
+                        ConditionalAccessExpression(IdentifierName(propName), 
+                            InvocationExpression(MemberBindingExpression(IdentifierName("Invoke")),
+                                ArgumentList(SeparatedList(
+                                    m.ParameterList.Parameters.Select(p=>Argument(IdentifierName(p.Identifier)))))
+                                
+                                )))
+                        ).WithSemicolonToken(Semicolon()
+                    ));
+            }
+
+            return cl;
+
+        }
+        
         private ClassDeclarationSyntax WithEvents(ClassDeclarationSyntax cl, WaylandProtocol protocol,
             WaylandProtocolInterface @interface)
         {
@@ -18,6 +64,7 @@ namespace NWayland.Generator
                 .AddBaseListTypes(SimpleBaseType(ParseTypeName("global::NWayland.Interop.IWlEventsListener")))
                 .WithModifiers(TokenList(Token(SyntaxKind.PublicKeyword), Token(SyntaxKind.AbstractKeyword)));
 
+            
             var switchStatement = SwitchStatement(MemberAccess(IdentifierName("arguments"), "Opcode"));
             var senderExpr = CastExpression(ParseTypeName(GetWlInterfaceTypeName(@interface.Name)),
                 MemberAccess(IdentifierName("arguments"), "Sender"));
@@ -25,7 +72,7 @@ namespace NWayland.Generator
             for (var eventIndex = 0; eventIndex < evs.Length; eventIndex++)
             {
                 var ev = evs[eventIndex];
-                var eventName = $"On{Pascalize(ev.Name)}";
+                var eventName = $"{Pascalize(ev.Name)}";
 
                 var handlerParameters = new SeparatedSyntaxList<ParameterSyntax>();
 
@@ -103,8 +150,7 @@ namespace NWayland.Generator
                     .WithModifiers(TokenList(Token(SyntaxKind.ProtectedKeyword), Token(SyntaxKind.VirtualKeyword)))
                     .WithParameterList(ParameterList(handlerParameters))
                     .WithBody(Block());
-
-
+                
                 method = WithSummary(method, ev.Description);
 
                 eventsClass = eventsClass.AddMembers(method);
@@ -133,8 +179,11 @@ namespace NWayland.Generator
 
             eventsClass = eventsClass.AddMembers(dispatchEvent);
 
-
+            eventsClass =
+                eventsClass.AddMembers(GenerateDelegatingClass(eventsClass, "Relay", "Listener"));
+            
             cl = cl.AddMembers(eventsClass);
+            
             return cl;
         }
     }

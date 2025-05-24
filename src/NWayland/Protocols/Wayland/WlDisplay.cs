@@ -7,14 +7,15 @@ namespace NWayland.Protocols.Wayland
     {
         internal object SyncRoot { get; } = new();
         
-        public static WlDisplay Connect(string? name = null)
+        public static WlDisplay Connect(WlDisplay.Listener? listener = null, string? name = null)
         {
             var handle = LibWayland.wl_display_connect(name);
             if (handle == IntPtr.Zero)
                 throw new NWaylandException("Failed to connect to wayland display");
-            return new WlDisplay(handle, InterfaceVersion);
+            return new WlDisplay(new WlProxyCreationContext(null!, // special case
+                null, ProxyType.Interface, handle, true, listener));
         }
-
+        
         public int GetFd() => LibWayland.wl_display_get_fd(Handle);
 
         public int Dispatch() => LibWayland.wl_display_dispatch(Handle);

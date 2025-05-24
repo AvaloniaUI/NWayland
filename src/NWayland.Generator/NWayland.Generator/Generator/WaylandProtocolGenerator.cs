@@ -152,9 +152,6 @@ namespace NWayland.Generator
                 cl = WithRequests(cl, protocol, @interface);
                 cl = WithEvents(cl, protocol, @interface);
                 cl = WithEnums(cl, protocol, @interface);
-                cl = WithFactory(cl, @interface)
-                    .AddMembers(DeclareConstant("string", "InterfaceName", MakeLiteralExpression(@interface.Name)))
-                    .AddMembers(DeclareConstant("int", "InterfaceVersion", MakeLiteralExpression(@interface.Version)));
 
                 var ctor = ConstructorDeclaration(cl.Identifier)
                     .AddModifiers(Token(SyntaxKind.PublicKeyword))
