@@ -32,5 +32,5 @@
     <ItemGroup>
         <ProjectReference Include="../NWayland/NWayland.csproj" />
     </ItemGroup>
-    <Import Project="..\..\src\NWayland.Generator\NWayland.Generator\NWayland.Generator.Use.targets"/>
+    <Import Project="..\..\src\NWayland.Generator\NWayland.Generator.Use.targets"/>
 </Project>

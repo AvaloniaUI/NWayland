@@ -14,6 +14,4 @@
     <ItemGroup>
         <ProjectReference Include="..\..\src\NWayland.Generator\NWayland.Generator\NWayland.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false"/>
     </ItemGroup>
-    <Import Project="..\..\src\NWayland.Generator\NWayland.Generator\NWayland.Generator.targets"/>
-
 </Project>

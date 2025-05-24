@@ -30,5 +30,5 @@
         <AdditionalFiles Include="../../external/wlr-protocols/**/*.xml" NWaylandNamespace="NWayland.Protocols.Wlr" />
         <ProjectReference Include="../NWayland/NWayland.csproj" />
     </ItemGroup>
-    <Import Project="..\..\src\NWayland.Generator\NWayland.Generator\NWayland.Generator.Use.targets"/>
+    <Import Project="..\..\src\NWayland.Generator\NWayland.Generator.Use.targets"/>
 </Project>
