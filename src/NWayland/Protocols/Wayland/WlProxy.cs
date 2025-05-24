@@ -12,6 +12,8 @@ namespace NWayland.Protocols.Wayland
         private readonly uint _id;
         private bool _isDisposed;
         private WlEventQueue? _queue;
+        internal WlDisplay Display => _display;
+        internal WlEventQueue? Queue => _queue;
 
         protected WlProxy(WlProxyContext context, IntPtr handle, WlInterfaceDescription @interface, bool ownsHandle = true)
         {
@@ -148,6 +150,7 @@ namespace NWayland.Protocols.Wayland
                                 }
                             }
                         }
+                        // TODO: Array
                         else
                         {
                             args[c] = call.NormalArgs[normalIndex];

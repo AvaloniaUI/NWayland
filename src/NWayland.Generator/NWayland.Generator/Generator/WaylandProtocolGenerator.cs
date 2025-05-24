@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -12,6 +13,7 @@ namespace NWayland.Generator
     public partial class WaylandProtocolGenerator
     {
         private readonly Dictionary<string, string> _protocolFullNames = new();
+        private readonly Dictionary<string, string> _internalProtocolFullNames = new();
         private readonly Dictionary<string, string> _protocolNamespaces = new();
         private readonly Dictionary<NwgSourceText, WaylandProtocol> _protocols = new();
         private readonly EquatableArray<NwgArrayTypeMapping> _arrayMappings;
@@ -43,6 +45,7 @@ namespace NWayland.Generator
                     }
 
                     _protocolFullNames.Add(i.Name, fullName);
+                    _internalProtocolFullNames.Add(i.Name, fullName);
                 }
             }
         }
@@ -56,6 +59,14 @@ namespace NWayland.Generator
             {
                 addSource(p.Value.Name, gen.Generate(p.Value));
             }
+
+            var attributes = new StringBuilder();
+            foreach (var iface in gen._internalProtocolFullNames)
+            {
+                attributes.AppendLine($"[assembly:global::NWayland.NWaylandInterfaceToProxyNameMappingAttribute(\"{iface.Key}\", typeof({iface.Value}))]");
+            }
+
+            addSource("__generated-proxy-map", attributes.ToString());
         }
 
         private WaylandProtocol? _currentProtocol;
