@@ -72,6 +72,27 @@ namespace NWayland.Interop
         [DllImport(Wayland, ExactSpelling = true)]
         internal static extern void wl_proxy_destroy(IntPtr proxy);
 
+        [DllImport(Wayland, ExactSpelling = true)]
+        internal static extern IntPtr wl_display_create_queue(IntPtr display);
+
+        [DllImport(Wayland, ExactSpelling = true)]
+        internal static extern void wl_event_queue_destroy(IntPtr queue);
+
+        [DllImport(Wayland, ExactSpelling = true)]
+        internal static extern int wl_display_dispatch_queue(IntPtr display, IntPtr queue);
+
+        [DllImport(Wayland, ExactSpelling = true)]
+        internal static extern int wl_display_dispatch_queue_pending(IntPtr display, IntPtr queue);
+
+        [DllImport(Wayland, ExactSpelling = true)]
+        internal static extern int wl_display_prepare_read_queue(IntPtr display, IntPtr queue);
+
+        [DllImport(Wayland, ExactSpelling = true)]
+        internal static extern int wl_display_roundtrip_queue(IntPtr display, IntPtr queue);
+
+        [DllImport(Wayland, ExactSpelling = true)]
+        internal static extern void wl_proxy_set_queue(IntPtr proxy, IntPtr queue);
+
         private delegate int WlProxyDispatcherDelegate(IntPtr implementation, IntPtr target, uint opcode, ref WlMessage message, WlArgument* argument);
 
         private static readonly Dictionary<uint, WeakReference<WlProxy>> _proxies = new();
