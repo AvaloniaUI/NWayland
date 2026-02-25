@@ -5,11 +5,11 @@ using NWayland.Protocols.Wayland;
 
 namespace NWayland.Interop
 {
-    public static unsafe class LibWayland
+    static unsafe class LibWayland
     {
         private const string Wayland = "libwayland-client.so.0";
 
-        [DllImport(Wayland, SetLastError = true, ExactSpelling = true, CharSet = CharSet.Unicode)]
+        [DllImport(Wayland, SetLastError = true, ExactSpelling = true, CharSet = CharSet.Ansi)]
         internal static extern IntPtr wl_display_connect(string? name);
 
         [DllImport(Wayland, SetLastError = true, ExactSpelling = true)]
@@ -46,13 +46,58 @@ namespace NWayland.Interop
         internal static extern IntPtr wl_proxy_marshal_array_constructor_versioned(IntPtr proxy, uint opcode, WlArgument* args, ref WlInterface @interface, uint version);
 
         [DllImport(Wayland, ExactSpelling = true)]
+        internal static extern IntPtr wl_proxy_marshal_array_constructor_versioned(IntPtr proxy, uint opcode, WlArgument* args, WlInterface* @interface, uint version);
+
+        [Flags]
+        internal enum WlProxyMarshalFlags : uint
+        {
+            None = 0,
+            Destroy = 1
+        }
+
+        [DllImport(Wayland, ExactSpelling = true)]
+        internal static extern IntPtr wl_proxy_marshal_array_flags(IntPtr proxy, uint opcode, WlInterface* @interface,
+            uint version, WlProxyMarshalFlags flags, WlArgument* args);
+        
+        
+        [DllImport(Wayland, ExactSpelling = true)]
         private static extern int wl_proxy_add_dispatcher(IntPtr proxy, WlProxyDispatcherDelegate dispatcherFunc, IntPtr implementation, IntPtr data);
 
         [DllImport(Wayland, ExactSpelling = true)]
         private static extern uint wl_proxy_get_id(IntPtr proxy);
+        
+        [DllImport(Wayland, ExactSpelling = true)]
+        internal static extern int wl_proxy_get_version(IntPtr proxy);
 
         [DllImport(Wayland, ExactSpelling = true)]
         internal static extern void wl_proxy_destroy(IntPtr proxy);
+
+        [DllImport(Wayland, ExactSpelling = true)]
+        internal static extern IntPtr wl_display_create_queue(IntPtr display);
+
+        [DllImport(Wayland, ExactSpelling = true)]
+        internal static extern void wl_event_queue_destroy(IntPtr queue);
+
+        [DllImport(Wayland, ExactSpelling = true)]
+        internal static extern int wl_display_dispatch_queue(IntPtr display, IntPtr queue);
+
+        [DllImport(Wayland, ExactSpelling = true)]
+        internal static extern int wl_display_dispatch_queue_pending(IntPtr display, IntPtr queue);
+
+        [DllImport(Wayland, ExactSpelling = true)]
+        internal static extern int wl_display_prepare_read_queue(IntPtr display, IntPtr queue);
+
+        [DllImport(Wayland, ExactSpelling = true)]
+        internal static extern int wl_display_roundtrip_queue(IntPtr display, IntPtr queue);
+
+        [DllImport(Wayland, ExactSpelling = true)]
+        internal static extern void wl_proxy_set_queue(IntPtr proxy, IntPtr queue);
+
+        [DllImport(Wayland, ExactSpelling = true)]
+        internal static extern IntPtr wl_proxy_create_wrapper(IntPtr proxy);
+
+        [DllImport(Wayland, ExactSpelling = true)]
+        internal static extern void wl_proxy_wrapper_destroy(IntPtr proxy_wrapper);
 
         private delegate int WlProxyDispatcherDelegate(IntPtr implementation, IntPtr target, uint opcode, ref WlMessage message, WlArgument* argument);
 
@@ -121,7 +166,7 @@ namespace NWayland.Interop
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public unsafe struct WlMessage
+    unsafe struct WlMessage
     {
         public readonly byte* Name;
         public readonly byte* Signature;
@@ -141,7 +186,7 @@ namespace NWayland.Interop
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public unsafe struct WlInterface
+    unsafe struct WlInterface
     {
         public readonly IntPtr Name;
         public readonly int Version;
@@ -178,7 +223,7 @@ namespace NWayland.Interop
     }
 
     [StructLayout(LayoutKind.Explicit)]
-    public unsafe struct WlArgument
+    unsafe struct WlArgument
     {
         [FieldOffset(0)]
         public int Int32;
@@ -210,7 +255,7 @@ namespace NWayland.Interop
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public unsafe readonly ref struct WlArray
+    readonly unsafe struct WlArray
     {
         public readonly IntPtr Size;
         public readonly IntPtr Alloc;

@@ -2,9 +2,9 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
-namespace NWayland.Scanner
+namespace NWayland.Generator
 {
-    public partial class WaylandProtocolGenerator
+    partial class WaylandProtocolGenerator
     {
         private static EnumDeclarationSyntax CreateEnum(WaylandProtocolEnum en)
         {

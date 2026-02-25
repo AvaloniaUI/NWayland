@@ -1,0 +1,15 @@
+<Project>
+    <ItemGroup>
+        <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="NWaylandNamespace" />
+        <CompilerVisibleProperty Include="NWayland_ArrayHints" />
+        <NWaylandArrayHint Update="@(NWaylandArrayHint)" Visible="false" />
+        
+    </ItemGroup>
+    <PropertyGroup>
+        <NWayland_ArrayHints>@(NWaylandArrayHint -> '%(Identity)', '|')</NWayland_ArrayHints>
+    </PropertyGroup>
+    <ItemGroup>
+        <NWaylandArrayHint Remove="@(NWaylandArrayHint)"/>
+    </ItemGroup>
+        
+</Project>

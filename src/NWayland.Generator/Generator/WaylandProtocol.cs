@@ -1,4 +1,7 @@
-namespace NWayland.Scanner
+using System.IO;
+using System.Xml.Serialization;
+
+namespace NWayland.Generator
 {
     [System.SerializableAttribute]
     [System.ComponentModel.DesignerCategoryAttribute("code")]
@@ -11,6 +14,11 @@ namespace NWayland.Scanner
 
         [System.Xml.Serialization.XmlAttributeAttribute("name")]
         public string Name { get; set; }
+
+        public static WaylandProtocol ParseXml(string xml)
+        {
+            return (WaylandProtocol)new XmlSerializer(typeof(WaylandProtocol)).Deserialize(new StringReader(xml));
+        }
     }
 
     [System.SerializableAttribute]
@@ -22,8 +30,8 @@ namespace NWayland.Scanner
         public WaylandProtocolEnum[]? Enums { get; set; }
         [System.Xml.Serialization.XmlElementAttribute("event", typeof(WaylandProtocolMessage))]
         public WaylandProtocolMessage[]? Events { get; set; }
-        [System.Xml.Serialization.XmlElementAttribute("request", typeof(WaylandProtocolRequest))]
-        public WaylandProtocolRequest[]? Requests { get; set; }
+        [System.Xml.Serialization.XmlElementAttribute("request", typeof(WaylandProtocolMessage))]
+        public WaylandProtocolMessage[]? Requests { get; set; }
 
         [System.Xml.Serialization.XmlElementAttribute("description", typeof(WaylandProtocolDescription))]
         public WaylandProtocolDescription? Description { get; set; }
@@ -103,13 +111,7 @@ namespace NWayland.Scanner
 
         [System.Xml.Serialization.XmlAttributeAttribute("since")]
         public int Since { get; set; }
-    }
-
-    [System.SerializableAttribute]
-    [System.ComponentModel.DesignerCategoryAttribute("code")]
-    [System.Xml.Serialization.XmlTypeAttribute(AnonymousType = true)]
-    public class WaylandProtocolRequest : WaylandProtocolMessage
-    {
+        
         [System.Xml.Serialization.XmlAttributeAttribute("type")]
         public string Type { get; set; }
     }

@@ -1,11 +1,11 @@
 using System.Collections.Generic;
 
-namespace NWayland.Scanner
+namespace NWayland.Generator
 {
-    public static class WaylandArgumentTypes
+    static class WaylandArgumentTypes
     {
         public const string Int32 = "int";
-        public const string Uint32 = "uint";
+        public const string UInt32 = "uint";
         public const string Fixed = "fixed";
         public const string String = "string";
         public const string Object = "object";

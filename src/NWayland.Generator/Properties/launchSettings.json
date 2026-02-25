@@ -1,0 +1,13 @@
+﻿{
+  "$schema": "https://json.schemastore.org/launchsettings.json",
+  "profiles": {
+    "DebugRoslynSourceGenerator_NWayland": {
+      "commandName": "DebugRoslynComponent",
+      "targetProject": "../../NWayland/NWayland.csproj"
+    },
+    "DebugRoslynSourceGenerator_HelloWayland": {
+      "commandName": "DebugRoslynComponent",
+      "targetProject": "../../../samples/HelloWayland/HelloWayland.csproj"
+    }
+  }
+}
