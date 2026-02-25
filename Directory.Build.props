@@ -1,6 +1,7 @@
 <Project>
 
   <PropertyGroup>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/kekekeks/NWayland</PackageProjectUrl>
     <RepositoryUrl>https://github.com/kekekeks/NWayland</RepositoryUrl>
