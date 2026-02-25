@@ -152,35 +152,24 @@ namespace NWayland.Generator
                 cl = WithRequests(cl, protocol, @interface);
                 cl = WithEvents(cl, protocol, @interface);
                 cl = WithEnums(cl, protocol, @interface);
-
-                var ctor = ConstructorDeclaration(cl.Identifier)
-                    .AddModifiers(Token(SyntaxKind.PublicKeyword))
-                    .WithParameterList(ParameterList(
-                        SeparatedList(new[]
-                        {
-                            Parameter(Identifier("handle")).WithType(ParseTypeName("IntPtr")),
-                            Parameter(Identifier("version")).WithType(ParseTypeName("int"))
-                        }))).WithBody(Block())
-                    .WithInitializer(ConstructorInitializer(SyntaxKind.BaseConstructorInitializer,
-                        ArgumentList(SeparatedList(new[]
-                        {
-                            Argument(IdentifierName("handle")),
-                            Argument(IdentifierName("version"))
-                        }))));
-                cl = cl.AddMembers(ctor);
+                
                 cl = cl.AddMembers(ConstructorDeclaration(cl.Identifier)
                     .AddModifiers(Token(SyntaxKind.PrivateKeyword))
                     .WithParameterList(ParameterList(
                         SeparatedList(new[]
                         {
                             Parameter(Identifier("context")).WithType(ParseTypeName("global::NWayland.Interop.WlProxyCreationContext")),
-
                         }))).WithBody(Block())
                     .WithInitializer(ConstructorInitializer(SyntaxKind.BaseConstructorInitializer,
                         ArgumentList(SeparatedList(new[]
                         {
                             Argument(IdentifierName("context")),
                         })))));
+                cl = cl.AddMembers(ParseMemberDeclaration(@$"
+                public static {cl.Identifier} Import(WlDisplay display, WlEventQueue? queue, IntPtr handle, bool ownsHandle, IWlEventsListener? listener)
+                {{
+                    return ({cl.Identifier})WlProxy.Import(ProxyType, display, queue, handle, ownsHandle, listener);
+                }}")!);
                 
                 ns = ns.AddMembers(cl);
             }

@@ -125,15 +125,20 @@ namespace NWayland.Interop
             return 0;
         }
 
-        public static uint RegisterProxy(WlProxy wlProxy)
+        public static uint RegisterProxy(WlProxy wlProxy, bool setDispatcher)
         {
             lock (_proxies)
             {
                 var id = wl_proxy_get_id(wlProxy.Handle);
-                var idp = (IntPtr)new UIntPtr(id).ToPointer();
-                var ret = wl_proxy_add_dispatcher(wlProxy.Handle, _dispatcher, idp, idp);
-                if (ret == -1)
-                    throw new NWaylandException($"Failed to add dispatcher for proxy of type {wlProxy.GetType().Name}");
+                if (setDispatcher)
+                {
+                    var idp = (IntPtr)new UIntPtr(id).ToPointer();
+                    var ret = wl_proxy_add_dispatcher(wlProxy.Handle, _dispatcher, idp, idp);
+                    if (ret == -1)
+                        throw new NWaylandException(
+                            $"Failed to add dispatcher for proxy of type {wlProxy.GetType().Name}");
+                }
+
                 _proxies[id] = new WeakReference<WlProxy>(wlProxy);
                 return id;
             }

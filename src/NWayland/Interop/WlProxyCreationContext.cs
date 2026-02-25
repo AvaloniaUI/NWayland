@@ -7,7 +7,7 @@ public class WlProxyCreationContext
 {
     internal WlProxyCreationContext(WlDisplay display, WlEventQueue? queue, 
         WlInterfaceDescription @interface, IntPtr handle, bool ownsHandle,
-        IWlEventsListener? listener)
+        IWlEventsListener? listener, bool setDispatcher = true)
     {
         Display = display;
         Queue = queue;
@@ -15,6 +15,7 @@ public class WlProxyCreationContext
         Handle = handle;
         OwnsHandle = ownsHandle;
         Listener = listener;
+        SetDispatcher = setDispatcher;
     }
     internal WlDisplay Display { get; set; }
     internal WlEventQueue? Queue { get; set; }
@@ -22,4 +23,5 @@ public class WlProxyCreationContext
     internal IntPtr Handle { get; }
     internal bool OwnsHandle { get; }
     internal IWlEventsListener? Listener { get; }
+    public bool SetDispatcher { get; }
 }

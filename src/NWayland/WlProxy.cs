@@ -16,6 +16,7 @@ namespace NWayland
         private bool _isDisposed;
         private IWlEventsListener? _listener;
         private WlEventQueue? _queue;
+        private readonly bool _ownsHandle;
         internal WlDisplay Display => _display;
         internal WlEventQueue? Queue => _queue;
 
@@ -23,10 +24,8 @@ namespace NWayland
 
         protected WlProxy(WlProxyCreationContext context)
         {
-            if (!context.OwnsHandle)
-                throw new NotSupportedException();
             _display = context.Display;
-            
+            _ownsHandle = context.OwnsHandle;
             _interface = context.Interface;
             _listener = context.Listener;
             Handle = context.Handle;
@@ -45,20 +44,10 @@ namespace NWayland
                 throw new InvalidOperationException();
             if (this is WlDisplay)
                 return;
-            // TODO: adjust
-            _id = LibWayland.RegisterProxy(this);
+            if (_ownsHandle)
+                _id = LibWayland.RegisterProxy(this, context.SetDispatcher);
         }
         
-        protected WlProxy(IntPtr handle, int version)
-        {
-            Version = version;
-            Handle = handle;
-            if (this is WlDisplay)
-                return;
-            // TODO: adjust
-            _id = LibWayland.RegisterProxy(this);
-        }
-
         public int Version { get; }
 
         public IntPtr Handle { get; }
@@ -101,7 +90,8 @@ namespace NWayland
             if (_isDisposed || !disposing)
                 return;
             LibWayland.UnregisterProxy(_id);
-            LibWayland.wl_proxy_destroy(Handle);
+            if (_ownsHandle)
+                LibWayland.wl_proxy_destroy(Handle);
             _isDisposed = true;
         }
 
@@ -285,6 +275,14 @@ namespace NWayland
                 throw new ArgumentNullException();
             
             return InvokeCore(ref call, proxyType, listener, queue, newIdVersion);
+        }
+
+        protected static WlProxy Import(WlProxyTypeDescriptor descriptor, WlDisplay display, WlEventQueue? queue,
+            IntPtr handle, bool ownsHandle, IWlEventsListener? listener)
+        {
+            return descriptor.Factory(new WlProxyCreationContext(display, queue, descriptor.Interface, handle,
+                ownsHandle,
+                listener, listener != null && ownsHandle));
         }
     }
 }
