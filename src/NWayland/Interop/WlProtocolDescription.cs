@@ -129,7 +129,7 @@ public class WlMessageDescription
                 Arguments = _args.ToList(),
                 IsDestructor = _isDestructor,
                 SinceVersion = _sinceVersion,
-                Signature = string.Join("", _args.Select(x => (char)x.Code))
+                Signature = string.Join("", _args.Select(x => (x.AllowNull ? "?" : "") + (char)x.Code))
             };
         }
     }
