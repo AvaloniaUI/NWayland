@@ -13,10 +13,10 @@ namespace NWayland
         private readonly WlDisplay _display;
         private readonly WlInterfaceDescription _interface;
         private readonly uint _id;
-        private bool _isDisposed;
+        private protected bool _isDisposed;
         private IWlEventsListener? _listener;
         private WlEventQueue? _queue;
-        private readonly bool _ownsHandle;
+        private protected readonly bool _ownsHandle;
         internal WlDisplay Display => _display;
         internal WlEventQueue? Queue => _queue;
 
@@ -87,16 +87,44 @@ namespace NWayland
 
         protected virtual void Dispose(bool disposing)
         {
-            if (_isDisposed || !disposing)
+            if (_isDisposed)
                 return;
-            LibWayland.UnregisterProxy(_id);
-            if (_ownsHandle)
-                LibWayland.wl_proxy_destroy(Handle);
-            _isDisposed = true;
+            lock (_display.SyncRoot)
+            {
+                if (_isDisposed)
+                    return;
+                LibWayland.UnregisterProxy(_id);
+                if (_ownsHandle && this is not WlDisplay)
+                {
+                    if (_display._isDisposed)
+                    {
+                        System.Diagnostics.Trace.TraceWarning(
+                            $"WlProxy of type {GetType().Name} (id={_id}) disposed after display disconnect. Native handle leaked.");
+                    }
+                    else if (!disposing && !_display._ownsHandle)
+                    {
+                        // Display is externally owned — can't trust its state from finalizer.
+                        System.Diagnostics.Trace.TraceWarning(
+                            $"WlProxy of type {GetType().Name} (id={_id}) finalized with externally-owned display. Native handle leaked.");
+                    }
+                    else
+                    {
+                        LibWayland.wl_proxy_destroy(Handle);
+                    }
+                }
+                _isDisposed = true;
+            }
+        }
+
+        ~WlProxy()
+        {
+            Dispose(false);
         }
 
         private static bool strcmp(string left, byte* right)
         {
+            if (right == null)
+                return left.Length == 0;
             for (var c = 0;; c++)
             {
                 if (left.Length <= c)
@@ -147,7 +175,10 @@ namespace NWayland
                     if (_isDisposed)
                         throw new ObjectDisposedException(this.GetType().FullName);
 
-                    Span<WlArgument> args = stackalloc WlArgument[(call.NormalArgs?.Count ?? 0) + (call.ObjectArgs?.Count ?? 0)];
+                    var argCount = (call.NormalArgs?.Count ?? 0) + (call.ObjectArgs?.Count ?? 0);
+                    if (argCount > 32)
+                        throw new InvalidOperationException($"Too many arguments ({argCount}) for wayland call");
+                    Span<WlArgument> args = stackalloc WlArgument[argCount];
                     int normalIndex = 0, objIndex = 0;
                     List<(IntPtr ptr, bool gcHandle)>? toDealloc = null; // TODO: pool
                     IntPtr? wrapper = null;
@@ -177,7 +208,7 @@ namespace NWayland
                                         args[c] = default;
                                     else
                                     {
-                                        var ptr = Marshal.StringToHGlobalAnsi(s);
+                                        var ptr = Marshal.StringToCoTaskMemUTF8(s);
                                         (toDealloc ??= new()).Add((ptr, false));
                                         args[c] = ptr;
                                     }
@@ -187,7 +218,7 @@ namespace NWayland
                                     var arr = (byte[])objArg!;
                                     var handle = GCHandle.Alloc(arr, GCHandleType.Pinned);
                                     (toDealloc ??= new()).Add((GCHandle.ToIntPtr(handle), true));
-                                    var wlArrayPtr = (WlArray*)Marshal.AllocHGlobal(Unsafe.SizeOf<WlArray>());
+                                    var wlArrayPtr = (WlArray*)Marshal.AllocCoTaskMem(Unsafe.SizeOf<WlArray>());
                                     *wlArrayPtr = WlArray.FromPointer<byte>((byte*)handle.AddrOfPinnedObject(),
                                         arr.Length);
                                     toDealloc.Add(((IntPtr)wlArrayPtr, false));
@@ -209,6 +240,8 @@ namespace NWayland
                         if (proxyType != null && queue != null)
                         {
                             wrapper = callTargetProxy = LibWayland.wl_proxy_create_wrapper(Handle);
+                            if (wrapper.Value == IntPtr.Zero)
+                                throw new OutOfMemoryException("wl_proxy_create_wrapper returned NULL");
                             LibWayland.wl_proxy_set_queue(wrapper.Value, queue.Handle);
                         }
 
@@ -234,9 +267,14 @@ namespace NWayland
                         
 
                         if (proxyType != null)
+                        {
+                            if (rv == IntPtr.Zero)
+                                throw new NWaylandException(
+                                    $"wl_proxy_marshal_array_flags returned NULL for {proxyType.Interface.Name}");
                             return proxyType.Factory(new WlProxyCreationContext(
                                 _display, queue ?? _queue,
                                 proxyType.Interface, rv, true, listener));
+                        }
 
                         return null;
 
@@ -251,7 +289,7 @@ namespace NWayland
                                 if (entry.gcHandle)
                                     GCHandle.FromIntPtr(entry.ptr).Free();
                                 else
-                                    Marshal.FreeHGlobal(entry.ptr);
+                                    Marshal.FreeCoTaskMem(entry.ptr);
                             }
                     }
                 }

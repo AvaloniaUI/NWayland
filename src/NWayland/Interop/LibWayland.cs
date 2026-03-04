@@ -254,8 +254,6 @@ namespace NWayland.Interop
 
         public static implicit operator WlArgument(WlProxy? value) => new() { IntPtr = value?.Handle ?? IntPtr.Zero };
 
-        public static implicit operator WlArgument(SafeHandle? value) => new() { IntPtr = value?.DangerousGetHandle() ?? IntPtr.Zero };
-
         public static readonly WlArgument NewId;
     }
 
@@ -281,7 +279,7 @@ namespace NWayland.Interop
 
         public static WlArray FromPointer<T>(T* ptr, int count) where T : unmanaged
         {
-            var size = new IntPtr(sizeof(T) * count);
+            var size = new IntPtr(checked(sizeof(T) * count));
             return new WlArray(size, size, (IntPtr)ptr);
         }
 

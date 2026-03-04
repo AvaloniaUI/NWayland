@@ -198,8 +198,16 @@ namespace NWayland.Protocols.Wayland
 
         protected override void Dispose(bool disposing)
         {
-            LibWayland.wl_display_disconnect(Handle);
-            base.Dispose(false);
+            if (!disposing)
+                return;
+            lock (SyncRoot)
+            {
+                if (_isDisposed)
+                    return;
+                _isDisposed = true;
+            }
+            if (_ownsHandle)
+                LibWayland.wl_display_disconnect(Handle);
         }
         
         public INWaylandTracer? Tracer { get; set; }

@@ -107,7 +107,7 @@ unsafe class WlEventArgsImpl : IDisposable
             if (Message.Arguments[c].Code == WaylandArgumentCodes.NewId)
             {
                 var bit = 1ul << c;
-                if ((_consumed & bit) != 0) 
+                if ((_consumed & bit) == 0) 
                     GetNewIdProxy(c, null).Dispose();
             }
         }
