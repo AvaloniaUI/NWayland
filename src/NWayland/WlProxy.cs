@@ -50,6 +50,8 @@ namespace NWayland
         
         public int Version { get; }
 
+        public uint Id => _id;
+
         public IntPtr Handle { get; }
         
         internal void DispatchEvent(uint opcode, ref WlMessage nativeMessage, WlArgument* arguments)
@@ -98,17 +100,20 @@ namespace NWayland
                 {
                     if (_display._isDisposed)
                     {
+                        WaylandTracer.TraceDestroy(this, !disposing, true);
                         System.Diagnostics.Trace.TraceWarning(
                             $"WlProxy of type {GetType().Name} (id={_id}) disposed after display disconnect. Native handle leaked.");
                     }
                     else if (!disposing && !_display._ownsHandle)
                     {
+                        WaylandTracer.TraceDestroy(this, true, true);
                         // Display is externally owned — can't trust its state from finalizer.
                         System.Diagnostics.Trace.TraceWarning(
                             $"WlProxy of type {GetType().Name} (id={_id}) finalized with externally-owned display. Native handle leaked.");
                     }
                     else
                     {
+                        WaylandTracer.TraceDestroy(this, !disposing, false);
                         LibWayland.wl_proxy_destroy(Handle);
                     }
                 }

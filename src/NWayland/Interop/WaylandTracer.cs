@@ -37,7 +37,7 @@ static class WaylandTracer
 
         var ev = args.Sender.Interface.Events[(int)args.Opcode];
         
-        display.Tracer.Trace(args.Sender, true, ev.Name, ConvertAargs(ev, args));
+        display.Tracer.Trace(args.Sender, true, false, ev.Name, ConvertAargs(ev, args));
     }
 
     public static unsafe void TraceCall(WlProxy wlProxy, WaylandCallBuilder call, WlArgument* args)
@@ -49,11 +49,21 @@ static class WaylandTracer
         var msg =  wlProxy.Interface.Methods[(int)call.OpCode];
         var eargs = new WlEventArgs(new WlEventArgsImpl(args, wlProxy, call.OpCode, msg));
         var oargs = ConvertAargs(msg, eargs);
-        tracer.Trace(wlProxy, false, msg.Name, oargs);
+        tracer.Trace(wlProxy, false, msg.IsDestructor, msg.Name, oargs);
+    }
+
+    public static void TraceDestroy(WlProxy wlProxy, bool isFromFinalizer, bool nativeCallSkipped)
+    {
+        var tracer = wlProxy.Display.Tracer;
+        if (tracer == null)
+            return;
+
+        tracer.TraceDestroy(wlProxy, isFromFinalizer, nativeCallSkipped);
     }
 }
 
 public interface INWaylandTracer
 {
-    void Trace(WlProxy sender, bool isEvent, string name, object[] args);
+    void Trace(WlProxy sender, bool isEvent, bool isDestructor, string name, object[] args);
+    void TraceDestroy(WlProxy proxy, bool isFromFinalizer, bool nativeCallSkipped);
 }
