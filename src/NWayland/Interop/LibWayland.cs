@@ -152,6 +152,8 @@ namespace NWayland.Interop
 
         public static WlProxy? FindByNative(IntPtr proxy)
         {
+            if (proxy == IntPtr.Zero)
+                return null;
             lock (_proxies)
             {
                 var id = wl_proxy_get_id(proxy);
