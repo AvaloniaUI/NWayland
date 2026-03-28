@@ -17,6 +17,7 @@ namespace NWayland
         private IWlEventsListener? _listener;
         private WlEventQueue? _queue;
         private protected readonly bool _ownsHandle;
+        private Dictionary<object, object>? _tags;
         internal WlDisplay Display => _display;
         internal WlEventQueue? Queue => _queue;
 
@@ -51,6 +52,10 @@ namespace NWayland
         public int Version { get; }
 
         public uint Id => _id;
+
+        public bool IsDisposed => _isDisposed;
+
+        public IDictionary<object, object> Tags => _tags ??= new Dictionary<object, object>();
 
         public IntPtr Handle { get; }
         
