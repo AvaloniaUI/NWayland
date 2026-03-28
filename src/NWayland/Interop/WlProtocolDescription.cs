@@ -74,23 +74,21 @@ public class WlMessageDescription
     {
         if (_nativeCache != null)
             return _nativeCache.Value;
-        var types = new List<IntPtr>();
-        foreach (var arg in Arguments)
+
+        var typesArr = Arguments.Count > 0 ? new WlInterface*[Arguments.Count] : null;
+        for (var c = 0; c < Arguments.Count; c++)
         {
+            var arg = Arguments[c];
             if (arg.Code is WaylandArgumentCodes.NewId or WaylandArgumentCodes.Object)
             {
                 var ntype = IntPtr.Zero;
                 if (arg.ProxyType != null)
                     ntype = (IntPtr)arg.ProxyType.Interface.GetNative();
-                
-                types.Add(ntype);
-            }
-        }
 
-        var typesArr = types.Count > 0 ? new WlInterface*[types.Count] : null;
-        for (var c = 0; c < types.Count; c++)
-        {
-            typesArr![c] = (WlInterface*)types[c];
+                typesArr![c] = (WlInterface*)ntype;
+            }
+            else
+                typesArr![c] = null;
         }
         
         _nativeCache = new WlMessage(Name, Signature, typesArr);
