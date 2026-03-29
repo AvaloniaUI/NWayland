@@ -119,8 +119,8 @@ namespace NWayland.Generator
 
                     parameterType = ParseTypeName(convertedType);
 
-                    if (
-                        arg.AllowNull && arg.Type is WaylandArgumentTypes.Object or WaylandArgumentTypes.String)
+                    if (arg.Type is WaylandArgumentTypes.Object
+                        || (arg.AllowNull && arg.Type is WaylandArgumentTypes.String))
                         parameterType = NullableType(parameterType);
 
                     var argumentGetterName = arg.Type switch

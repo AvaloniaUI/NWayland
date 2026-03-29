@@ -35,7 +35,7 @@ public ref struct WlEventArgs
         return Marshal.PtrToStringUTF8(ptr);
     }
 
-    public T GetProxy<T>(int num) where T : WlProxy => _impl.GetProxy<T>(num);
+    public T? GetProxy<T>(int num) where T : WlProxy => _impl.GetProxy<T>(num);
     public NewId<T, TListener> GetNewId<T, TListener>(int num) where T : WlProxy where TListener : class, IWlEventsListener => _impl.GetNewId<T, TListener>(num);
 
     internal WlEventArgs(WlEventArgsImpl impl) => _impl = impl;
