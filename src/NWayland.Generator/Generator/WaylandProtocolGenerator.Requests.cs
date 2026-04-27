@@ -69,7 +69,13 @@ namespace NWayland.Generator
                         }
                     }
 
-                    parameters.Add(Parameter(Identifier(argName)).WithType(ParseTypeName(parameterTypeName)));
+                    var parameterType = ParseTypeName(parameterTypeName);
+                    
+                    if (arg.Type is WaylandArgumentTypes.Object
+                        || (arg.AllowNull && arg.Type is WaylandArgumentTypes.String))
+                        parameterType = NullableType(parameterType);
+
+                    parameters.Add(Parameter(Identifier(argName)).WithType(parameterType));
                 }
 
                 if (arg.Type == WaylandArgumentTypes.NewId)

@@ -22,12 +22,12 @@ public ref struct WaylandCallBuilder : IDisposable
         };
     }
     
-    private void ObjectArg(object arg)
+    private void ObjectArg(object? arg)
     {
         (ObjectArgs ??= new()).Add(arg);
     }
 
-    public void Arg(WlProxy arg) => ObjectArg(arg);
+    public void Arg(WlProxy? arg) => ObjectArg(arg);
     
     public void Arg(string arg) => ObjectArg(arg);
 
