@@ -50,7 +50,7 @@ unsafe class WlEventArgsImpl : IDisposable
     public WlProxy Sender => _proxy;
     private ulong _consumed;
 
-    public WlEventArgsImpl(WlArgument* arguments, WlProxy proxy, uint opcode, WlMessageDescription message)
+    public WlEventArgsImpl( WlArgument* arguments, WlProxy proxy, uint opcode, WlMessageDescription message)
     {
         Arguments = arguments;
         Opcode = opcode;
@@ -64,7 +64,7 @@ unsafe class WlEventArgsImpl : IDisposable
         if (Message.Arguments[num].Code == WaylandArgumentCodes.Object)
         {
             // TODO: emphemeral proxies that we auto-dispose on exit
-            return (T?)LibWayland.FindByNative(proxyPtr);
+            return (T?)LibWayland.FindByNative(_proxy.Display, proxyPtr);
         }
         throw new InvalidOperationException();
     }

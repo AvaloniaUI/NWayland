@@ -88,7 +88,7 @@ namespace NWayland
         void UnregisterProxyBeforeDestroy()
         {
             GC.SuppressFinalize(this);
-            LibWayland.UnregisterProxy(_id);
+            LibWayland.UnregisterProxy(this);
             _isDisposed = true;
         }
 
@@ -100,7 +100,7 @@ namespace NWayland
             {
                 if (_isDisposed)
                     return;
-                LibWayland.UnregisterProxy(_id);
+                LibWayland.UnregisterProxy(this);
                 if (_ownsHandle && this is not WlDisplay)
                 {
                     if (_display._isDisposed)

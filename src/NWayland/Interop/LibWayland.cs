@@ -101,13 +101,14 @@ namespace NWayland.Interop
 
         private delegate int WlProxyDispatcherDelegate(IntPtr implementation, IntPtr target, uint opcode, ref WlMessage message, WlArgument* argument);
 
-        private static readonly Dictionary<uint, WeakReference<WlProxy>> _proxies = new();
+        private static readonly Dictionary<(IntPtr, uint), WeakReference<WlProxy>> _proxies = new();
 
         private static readonly WlProxyDispatcherDelegate _dispatcher = WlProxyDispatcher;
 
         private static int WlProxyDispatcher(IntPtr implementation, IntPtr target, uint opcode, ref WlMessage message, WlArgument* arguments)
         {
-            var id = (uint)implementation.ToPointer();
+
+            var id = (implementation, LibWayland.wl_proxy_get_id(target));
 
             WlProxy? proxy;
             lock (_proxies)
@@ -125,6 +126,8 @@ namespace NWayland.Interop
             return 0;
         }
 
+        private static (IntPtr, uint) GetProxyId(WlProxy proxy) => (proxy.Display.Handle, proxy.Id);
+        
         public static uint RegisterProxy(WlProxy wlProxy, bool setDispatcher)
         {
             lock (_proxies)
@@ -133,30 +136,30 @@ namespace NWayland.Interop
                 if (setDispatcher)
                 {
                     var idp = (IntPtr)new UIntPtr(id).ToPointer();
-                    var ret = wl_proxy_add_dispatcher(wlProxy.Handle, _dispatcher, idp, idp);
+                    var ret = wl_proxy_add_dispatcher(wlProxy.Handle, _dispatcher, wlProxy.Display.Handle, idp);
                     if (ret == -1)
                         throw new NWaylandException(
                             $"Failed to add dispatcher for proxy of type {wlProxy.GetType().Name}");
                 }
 
-                _proxies[id] = new WeakReference<WlProxy>(wlProxy);
+                _proxies[(wlProxy.Display.Handle, id)] = new WeakReference<WlProxy>(wlProxy);
                 return id;
             }
         }
 
-        public static void UnregisterProxy(uint id)
+        public static void UnregisterProxy(WlProxy id)
         {
             lock (_proxies)
-                _proxies.Remove(id);
+                _proxies.Remove(GetProxyId(id));
         }
 
-        public static WlProxy? FindByNative(IntPtr proxy)
+        public static WlProxy? FindByNative(WlDisplay display, IntPtr proxy)
         {
             if (proxy == IntPtr.Zero)
                 return null;
             lock (_proxies)
             {
-                var id = wl_proxy_get_id(proxy);
+                var id = (display.Handle, wl_proxy_get_id(proxy));
                 if (!_proxies.TryGetValue(id, out var weakRef))
                 {
                     // TODO: Investigate
