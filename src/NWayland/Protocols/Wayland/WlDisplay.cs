@@ -6,6 +6,7 @@ namespace NWayland.Protocols.Wayland
     public partial class WlDisplay
     {
         internal object SyncRoot { get; } = new();
+        internal object DispatchLock { get; } = new();
         
         /// <summary>
         /// Connect to a Wayland display.
@@ -85,8 +86,12 @@ namespace NWayland.Protocols.Wayland
         /// <seealso cref="WlDisplay.DispatchPending"/>
         /// <seealso cref="WlEventQueue.Dispatch"/>
         /// <seealso cref="WlDisplay.ReadEvents"/>
-        public int Dispatch() => LibWayland.wl_display_dispatch(Handle);
-        
+        public int Dispatch()
+        {
+            lock (DispatchLock)
+                return LibWayland.wl_display_dispatch(Handle);
+        }
+
         /// <summary>
         /// Dispatch default queue events without reading from the display fd.
         /// </summary>
@@ -99,8 +104,12 @@ namespace NWayland.Protocols.Wayland
         /// <seealso cref="WlDisplay.Dispatch"/>
         /// <seealso cref="WlEventQueue.Dispatch"/>
         /// <seealso cref="WlDisplay.Flush"/>
-        public int DispatchPending() => LibWayland.wl_display_dispatch_pending(Handle);
-        
+        public int DispatchPending()
+        {
+            lock (DispatchLock)
+                return LibWayland.wl_display_dispatch_pending(Handle);
+        }
+
         /// <summary>
         /// Block until all pending request are processed by the server
         ///
@@ -113,7 +122,11 @@ namespace NWayland.Protocols.Wayland
         /// and doing so will cause a dead lock.
         /// </summary>
         /// <returns>The number of dispatched events on success or -1 on failure</returns>
-        public int Roundtrip() => LibWayland.wl_display_roundtrip(Handle);
+        public int Roundtrip()
+        {
+            lock (DispatchLock)
+                return LibWayland.wl_display_roundtrip(Handle);
+        }
 
         /// <summary>
         /// Prepare to read events from the display's file descriptor using the default event queue.

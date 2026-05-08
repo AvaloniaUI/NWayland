@@ -18,8 +18,8 @@ namespace NWayland
         private WlEventQueue? _queue;
         private protected readonly bool _ownsHandle;
         private Dictionary<object, object>? _tags;
-        internal WlDisplay Display => _display;
-        internal WlEventQueue? Queue => _queue;
+        public WlDisplay Display => _display;
+        public WlEventQueue? Queue => _queue;
 
         internal WlInterfaceDescription Interface => _interface;
 
@@ -170,12 +170,12 @@ namespace NWayland
                 throw new InvalidOperationException(
                     $"Method {method.Name} is not supported for interface version {Version}");
 
-            var needReleaseQueueLock = false;
-            if (queue != null && proxyType != null)
+            object? dispatchLock = null;
+            if (proxyType != null)
             {
                 // Make sure that queue is not dispatching on another thread
-                Monitor.Enter(queue.DispatchLock);
-                needReleaseQueueLock = true;
+                dispatchLock = queue?.DispatchLock ?? _display.DispatchLock;
+                Monitor.Enter(dispatchLock);
             }
 
             try
@@ -306,8 +306,8 @@ namespace NWayland
             }
             finally
             {
-                if (needReleaseQueueLock)
-                    Monitor.Exit(queue!.DispatchLock);
+                if (dispatchLock != null)
+                    Monitor.Exit(dispatchLock);
             }
         }
 
@@ -331,6 +331,32 @@ namespace NWayland
             return descriptor.Factory(new WlProxyCreationContext(display, queue, descriptor.Interface, handle,
                 ownsHandle,
                 listener, listener != null && ownsHandle));
+        }
+
+        /// <summary>
+        /// Changes the queue associated with this object
+        /// </summary>
+        public void SetQueue(WlEventQueue? queue)
+        {
+            var oldLock = _queue?.DispatchLock ?? _display.DispatchLock;
+            var newLock = queue?.DispatchLock ?? _display.DispatchLock;
+            Monitor.Enter(oldLock);
+            Monitor.Enter(newLock);
+            try
+            {
+                    lock (_display.SyncRoot)
+                    {
+                        if (IsDisposed)
+                            throw new ObjectDisposedException(nameof(WlProxy));
+                        LibWayland.wl_proxy_set_queue(Handle, queue?.Handle ?? IntPtr.Zero);
+                        _queue = queue;
+                    }
+            }
+            finally
+            {
+                Monitor.Exit(newLock);
+                Monitor.Exit(oldLock);
+            }
         }
     }
 }
