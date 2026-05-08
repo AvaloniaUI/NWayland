@@ -7,9 +7,28 @@ namespace NWayland.Interop;
 
 public ref struct WaylandCallBuilder : IDisposable
 {
-    // TODO: Pooling
+    [ThreadStatic] private static Stack<List<WlArgument>>? _normalArgsPool;
+    [ThreadStatic] private static Stack<List<object?>>? _objectArgsPool;
+    private static T GetPooled<T>(ref Stack<T>? pool) where T : new()
+    {
+        pool ??= new Stack<T>();
+        if (pool.TryPop(out var result))
+            return result;
+        return new T();
+    }
+
+    private static void ReturnToPool<T>(ref Stack<List<T>>? pool, ref List<T>? value)
+    {
+        if (value is null)
+            return;
+        pool ??= new();
+        value.Clear();
+        pool.Push(value);
+        value = null;
+    }
+
     internal List<WlArgument>? NormalArgs;
-    internal List<object>? ObjectArgs;
+    internal List<object?>? ObjectArgs;
     private WlProxy _target;
     internal uint OpCode;
 
@@ -24,14 +43,14 @@ public ref struct WaylandCallBuilder : IDisposable
     
     private void ObjectArg(object? arg)
     {
-        (ObjectArgs ??= new()).Add(arg);
+        (ObjectArgs ??= GetPooled(ref _objectArgsPool)).Add(arg);
     }
 
     public void Arg(WlProxy? arg) => ObjectArg(arg);
     
     public void Arg(string arg) => ObjectArg(arg);
 
-    private void Add(WlArgument arg) => (NormalArgs ??= new()).Add(arg);
+    private void Add(WlArgument arg) => (NormalArgs ??= GetPooled(ref _normalArgsPool)).Add(arg);
     
     public void ArgNewId() => Add(WlArgument.NewId);
 
@@ -67,6 +86,7 @@ public ref struct WaylandCallBuilder : IDisposable
     
     public void Dispose()
     {
-        // TODO: Free pooled resources
+        ReturnToPool(ref _normalArgsPool, ref NormalArgs);
+        ReturnToPool(ref _objectArgsPool, ref ObjectArgs);
     }
 }
