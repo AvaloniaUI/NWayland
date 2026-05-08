@@ -333,17 +333,22 @@ namespace NWayland
                 listener, listener != null && ownsHandle));
         }
 
+
+        private static object s_QueueSwitchLock = new();
         /// <summary>
-        /// Changes the queue associated with this object
+        /// Changes the queue associated with this object. Enters dispatch lock for BOTH queues,
+        /// so avoid scenarios that require doing this from 2 threads dispatching involved queues
         /// </summary>
         public void SetQueue(WlEventQueue? queue)
         {
-            var oldLock = _queue?.DispatchLock ?? _display.DispatchLock;
-            var newLock = queue?.DispatchLock ?? _display.DispatchLock;
-            Monitor.Enter(oldLock);
-            Monitor.Enter(newLock);
-            try
+            lock (s_QueueSwitchLock) // Avoid deadlocks in normal circumstances
             {
+                var oldLock = _queue?.DispatchLock ?? _display.DispatchLock;
+                var newLock = queue?.DispatchLock ?? _display.DispatchLock;
+                Monitor.Enter(oldLock);
+                Monitor.Enter(newLock);
+                try
+                {
                     lock (_display.SyncRoot)
                     {
                         if (IsDisposed)
@@ -351,11 +356,12 @@ namespace NWayland
                         LibWayland.wl_proxy_set_queue(Handle, queue?.Handle ?? IntPtr.Zero);
                         _queue = queue;
                     }
-            }
-            finally
-            {
-                Monitor.Exit(newLock);
-                Monitor.Exit(oldLock);
+                }
+                finally
+                {
+                    Monitor.Exit(newLock);
+                    Monitor.Exit(oldLock);
+                }
             }
         }
     }
