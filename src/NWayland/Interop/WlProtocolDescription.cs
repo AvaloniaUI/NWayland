@@ -18,15 +18,22 @@ public unsafe class WlInterfaceDescription
     public static Builder Create(string name, int version) => new Builder(name, version);
 
     private volatile WlInterface* _nativeCache;
+    private object _nativeCacheBuilderLock = new();
     internal WlInterface* GetNative()
     {
         if (_nativeCache != null)
+            // check -> lock -> recheck -> alloc caching pattern
+            // ReSharper disable once InconsistentlySynchronizedField
             return _nativeCache;
-        
-        var native = (WlInterface*)Marshal.AllocHGlobal(Unsafe.SizeOf<WlInterface>());
-        *native = new WlInterface(Name, Version, Methods.Select(x => x.GetNative()).ToArray(),
-            Events.Select(x => x.GetNative()).ToArray());
-        return _nativeCache = native;
+        lock (_nativeCacheBuilderLock)
+        {
+            if (_nativeCache != null)
+                return _nativeCache;
+            var native = (WlInterface*)Marshal.AllocHGlobal(Unsafe.SizeOf<WlInterface>());
+            *native = new WlInterface(Name, Version, Methods.Select(x => x.GetNative()).ToArray(),
+                Events.Select(x => x.GetNative()).ToArray());
+            return _nativeCache = native;
+        }
     }
     
     public class Builder(string Name, int Version)
