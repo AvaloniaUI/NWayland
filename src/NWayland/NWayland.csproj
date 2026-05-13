@@ -43,6 +43,7 @@
         <!-- It's copied to stable, so it's a dupe -->
         <AdditionalFiles Remove="../../external/wayland-protocols/unstable/linux-dmabuf/linux-dmabuf-unstable-v1.xml" />
         <AdditionalFiles Remove="../../external/wayland-protocols/unstable/xdg-shell/xdg-shell-unstable-v5.xml" />
+        <AdditionalFiles Remove="../../external/wayland-protocols/unstable/tablet/tablet-unstable-v2.xml" />
 
         <!-- Name conflicts with the stable one, ignore --> 
         

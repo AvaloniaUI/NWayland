@@ -41,6 +41,9 @@ namespace NWayland.Generator
 
         [System.Xml.Serialization.XmlAttributeAttribute("version")]
         public int Version { get; set; }
+
+        [System.Xml.Serialization.XmlAttributeAttribute("frozen")]
+        public bool Frozen { get; set; }
     }
 
     [System.SerializableAttribute]

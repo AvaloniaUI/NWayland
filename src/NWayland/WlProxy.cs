@@ -259,7 +259,10 @@ namespace NWayland
                         // TODO: Verify that constructed entity is from the same protocol,
                         // otherwise where are we going to get a version
 
-                        var newProxyVersion = newIdVersion ?? (uint)Version;
+                        var newProxyVersion = newIdVersion
+                            ?? (proxyType is { Frozen: true }
+                                ? (uint)proxyType.Interface.Version
+                                : (uint)Version);
                         
                         if (method.IsDestructor)
                             UnregisterProxyBeforeDestroy();

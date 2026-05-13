@@ -142,7 +142,7 @@ public class WlMessageDescription
 
 public delegate WlProxy WlProxyFactory(WlProxyCreationContext context);
 
-public record WlProxyTypeDescriptor(WlInterfaceDescription Interface, Type ProxyType, WlProxyFactory Factory);
+public record WlProxyTypeDescriptor(WlInterfaceDescription Interface, Type ProxyType, WlProxyFactory Factory, bool Frozen = false);
 
 public record class WlMessageArgumentDescription
 {

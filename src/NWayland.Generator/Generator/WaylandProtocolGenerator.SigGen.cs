@@ -108,7 +108,8 @@ namespace NWayland.Generator
                         ObjectCreationExpression(ParseTypeName(cl.Identifier.ToString()), ArgumentList(SeparatedList([
                             Argument(IdentifierName("ctx")),
                         ])), null)
-                    ))
+                    )),
+                    Argument(MakeLiteralExpression(iface.Frozen))
                 ])), null);
 
             cl = cl.AddMembers(PropertyDeclaration(descriptorType, "ProxyType")
