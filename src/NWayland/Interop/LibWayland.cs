@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 using NWayland.Protocols.Wayland;
 
@@ -104,78 +105,104 @@ namespace NWayland.Interop
 
         private delegate int WlProxyDispatcherDelegate(IntPtr implementation, IntPtr target, uint opcode, ref WlMessage message, WlArgument* argument);
 
-        private static readonly Dictionary<(IntPtr, uint), WeakReference<WlProxy>> _proxies = new();
+        private static readonly Dictionary<IntPtr, WlDisplay> _displays = new();
+
+        [ThreadStatic]
+        private static ExceptionDispatchInfo? _pendingListenerException;
 
         private static readonly WlProxyDispatcherDelegate _dispatcher = WlProxyDispatcher;
 
         private static int WlProxyDispatcher(IntPtr implementation, IntPtr target, uint opcode, ref WlMessage message, WlArgument* arguments)
         {
-
-            var id = (implementation, LibWayland.wl_proxy_get_id(target));
-
-            WlProxy? proxy;
-            lock (_proxies)
+            WlDisplay? display;
+            lock (_displays)
             {
-                if (!_proxies.TryGetValue(id, out var weakRef))
+                if (!_displays.TryGetValue(implementation, out display))
                     return 0;
-                if (!weakRef.TryGetTarget(out proxy))
-                {
-                    _proxies.Remove(id);
-                    return 0;
-                }
             }
 
-            proxy.DispatchEvent(opcode, ref message, arguments);
+            var proxy = display.FindByNative(target);
+            if (proxy == null)
+                return 0;
+
+            try
+            {
+                proxy.DispatchEvent(opcode, ref message, arguments);
+            }
+            catch (Exception ex)
+            {
+                try
+                {
+                    display.Tracer?.Trace(proxy, true, false,
+                        proxy.Interface.Events[(int)opcode],
+                        ReadOnlySpan<WlTracedArgument>.Empty);
+                }
+                catch
+                {
+                    // Tracer itself threw — ignore
+                }
+
+                var pending = _pendingListenerException;
+                if (pending != null)
+                {
+                    var exceptions = pending.SourceException is AggregateException agg
+                        ? new List<Exception>(agg.InnerExceptions)
+                        : new List<Exception> { pending.SourceException };
+                    exceptions.Add(ex);
+                    _pendingListenerException = ExceptionDispatchInfo.Capture(new AggregateException(exceptions));
+                }
+                else
+                {
+                    _pendingListenerException = ExceptionDispatchInfo.Capture(ex);
+                }
+            }
             return 0;
         }
 
-        private static (IntPtr, uint) GetProxyId(WlProxy proxy) => (proxy.Display.Handle, proxy.Id);
-        
-        public static uint RegisterProxy(WlProxy wlProxy, bool setDispatcher)
-        {
-            lock (_proxies)
-            {
-                var id = wl_proxy_get_id(wlProxy.Handle);
-                if (setDispatcher)
-                {
-                    var idp = (IntPtr)new UIntPtr(id).ToPointer();
-                    var ret = wl_proxy_add_dispatcher(wlProxy.Handle, _dispatcher, wlProxy.Display.Handle, idp);
-                    if (ret == -1)
-                        throw new NWaylandException(
-                            $"Failed to add dispatcher for proxy of type {wlProxy.GetType().Name}");
-                }
 
-                _proxies[(wlProxy.Display.Handle, id)] = new WeakReference<WlProxy>(wlProxy);
-                return id;
+        internal static void RethrowPendingListenerException()
+        {
+            var ex = _pendingListenerException;
+            if (ex != null)
+            {
+                _pendingListenerException = null;
+                ex.Throw();
             }
         }
 
-        public static void UnregisterProxy(WlProxy id)
+        internal struct ListenerExceptionScope : IDisposable
         {
-            lock (_proxies)
-                _proxies.Remove(GetProxyId(id));
+            public void Dispose() => RethrowPendingListenerException();
         }
 
-        public static WlProxy? FindByNative(WlDisplay display, IntPtr proxy)
+        internal static void RegisterDisplay(WlDisplay display)
         {
-            if (proxy == IntPtr.Zero)
-                return null;
-            lock (_proxies)
-            {
-                var id = (display.Handle, wl_proxy_get_id(proxy));
-                if (!_proxies.TryGetValue(id, out var weakRef))
-                {
-                    // TODO: Investigate
-                    // It's unclear if we should create a new managed object for wl_proxy here
-                    // since it means that said proxy was created by the native code
-                    return null;
-                }
+            lock (_displays)
+                _displays[display.Handle] = display;
+        }
 
-                if (!weakRef.TryGetTarget(out var target))
-                    _proxies.Remove(id);
-                return target;
+        internal static void UnregisterDisplay(WlDisplay display)
+        {
+            lock (_displays)
+            {
+                if (_displays.TryGetValue(display.Handle, out var current)
+                    && ReferenceEquals(current, display))
+                    _displays.Remove(display.Handle);
             }
         }
+
+        internal static uint SetupProxyDispatcher(WlProxy wlProxy)
+        {
+            var id = wl_proxy_get_id(wlProxy.Handle);
+            var idp = (IntPtr)new UIntPtr(id).ToPointer();
+            var ret = wl_proxy_add_dispatcher(wlProxy.Handle, _dispatcher, wlProxy.Display.Handle, idp);
+            if (ret == -1)
+                throw new NWaylandException(
+                    $"Failed to add dispatcher for proxy of type {wlProxy.GetType().Name}");
+            return id;
+        }
+
+        internal static uint GetProxyId(IntPtr proxyHandle) => wl_proxy_get_id(proxyHandle);
     }
 
     [StructLayout(LayoutKind.Sequential)]

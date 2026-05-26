@@ -7,7 +7,7 @@ namespace NWayland.Protocols.Wayland
     public unsafe partial class WlRegistry
     {
         public T Bind<T>(uint name, uint version, IWlEventsListener? listener = null,
-            WlEventQueue? queue = null) where T : WlProxy, IWlProxyTypeDescriptorProvider
+            IWlTargetQueue? queue = null) where T : WlProxy, IWlProxyTypeDescriptorProvider
         {
             var type = T.ProxyType;
             var iface = type.Interface;

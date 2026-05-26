@@ -42,7 +42,7 @@ public abstract class WlResource : IWaylandCallTarget, IDisposable
     }
 
     object IWaylandCallTarget.InvokeNewId(ref WaylandCallBuilder call, WlProxyTypeDescriptor proxyType,
-        IWlEventsListener? listener, WlEventQueue? queue, uint? newIdVersion)
+        IWlEventsListener? listener, IWlTargetQueue? queue, uint? newIdVersion)
     {
         return _impl.InvokeNewId(this, ref call, proxyType, listener,
             (int)(newIdVersion ?? (uint)Version));

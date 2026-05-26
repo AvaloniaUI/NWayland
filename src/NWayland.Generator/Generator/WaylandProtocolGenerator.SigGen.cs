@@ -166,7 +166,7 @@ namespace NWayland.Generator
                                 .WithType(ParseTypeName(proxyTypeName + ".Listener?"))
                                 .WithDefault(EqualsValueClause(MakeNullLiteralExpression())),
                             Parameter(Identifier("dispatchOnQueue"))
-                                .WithType(ParseTypeName("global::NWayland.WlEventQueue?"))
+                                .WithType(ParseTypeName("global::NWayland.IWlTargetQueue?"))
                                 .WithDefault(EqualsValueClause(MakeNullLiteralExpression()))
 
                         ]

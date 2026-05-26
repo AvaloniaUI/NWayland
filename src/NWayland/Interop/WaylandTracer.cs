@@ -44,13 +44,20 @@ static class WaylandTracer
     
     public static void TraceEvent(WlDisplay display, WlEventArgs args)
     {
-        if (display.Tracer == null)
+        var tracer = display.Tracer;
+        if (tracer == null)
             return;
 
-        var sender = (WlProxy)args.Sender;
-        var ev = sender.Interface.Events[(int)args.Opcode];
-        
-        display.Tracer.Trace(sender, true, false, ev, ConvertArgs(ev, args));
+        try
+        {
+            var sender = (WlProxy)args.Sender;
+            var ev = sender.Interface.Events[(int)args.Opcode];
+            tracer.Trace(sender, true, false, ev, ConvertArgs(ev, args));
+        }
+        catch
+        {
+            // Tracer is advisory — must not disrupt dispatch
+        }
     }
 
     public static unsafe void TraceCall(WlProxy wlProxy, WaylandCallBuilder call, WlArgument* args)
@@ -59,9 +66,17 @@ static class WaylandTracer
         if(tracer == null)
             return;
         
-        var msg =  wlProxy.Interface.Methods[(int)call.OpCode];
-        var eargs = new WlEventArgs(new WlEventArgsImpl(args, wlProxy, call.OpCode, msg));
-        tracer.Trace(wlProxy, false, msg.IsDestructor, msg, ConvertArgs(msg, eargs));
+        try
+        {
+            var msg =  wlProxy.Interface.Methods[(int)call.OpCode];
+            // Non-owning view — intentionally not disposed. The args are owned by InvokeCore's stackalloc.
+            var eargs = new WlEventArgs(new WlEventArgsImpl(args, wlProxy, call.OpCode, msg));
+            tracer.Trace(wlProxy, false, msg.IsDestructor, msg, ConvertArgs(msg, eargs));
+        }
+        catch
+        {
+            // Tracer is advisory — must not disrupt requests
+        }
     }
 
     public static void TraceDestroy(WlProxy wlProxy, bool isFromFinalizer, bool nativeCallSkipped)
@@ -70,7 +85,14 @@ static class WaylandTracer
         if (tracer == null)
             return;
 
-        tracer.TraceDestroy(wlProxy, isFromFinalizer, nativeCallSkipped);
+        try
+        {
+            tracer.TraceDestroy(wlProxy, isFromFinalizer, nativeCallSkipped);
+        }
+        catch
+        {
+            // Tracer is advisory — must not disrupt dispose
+        }
     }
 }
 

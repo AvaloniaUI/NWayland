@@ -97,7 +97,7 @@ namespace NWayland.Generator
                 );
 
                 parameters.Add(Parameter(Identifier("dispatchOnQueue"))
-                    .WithType(ParseTypeName("global::NWayland.WlEventQueue?"))
+                    .WithType(ParseTypeName("global::NWayland.IWlTargetQueue?"))
                     .WithDefault(EqualsValueClause(MakeNullLiteralExpression()))
                 );
             }

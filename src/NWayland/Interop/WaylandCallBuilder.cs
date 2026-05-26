@@ -10,7 +10,7 @@ public interface IWaylandCallTarget
     internal void Invoke(ref WaylandCallBuilder call);
 
     internal object InvokeNewId(ref WaylandCallBuilder call, WlProxyTypeDescriptor proxyType,
-        IWlEventsListener? listener, WlEventQueue? queue, uint? newIdVersion);
+        IWlEventsListener? listener, IWlTargetQueue? queue, uint? newIdVersion);
 }
 
 public ref struct WaylandCallBuilder : IDisposable
@@ -89,7 +89,7 @@ public ref struct WaylandCallBuilder : IDisposable
         _target.Invoke(ref this);
     }
 
-    public T InvokeNewId<T>(IWlEventsListener? listener, WlEventQueue? queue, uint? version = null) where T : IWlProxyTypeDescriptorProvider
+    public T InvokeNewId<T>(IWlEventsListener? listener, IWlTargetQueue? queue, uint? version = null) where T : IWlProxyTypeDescriptorProvider
     {
         return (T)_target.InvokeNewId(ref this, T.ProxyType, listener, queue, version);
     }

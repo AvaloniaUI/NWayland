@@ -1,24 +1,63 @@
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Threading;
 using NWayland.Interop;
 using NWayland.Protocols.Wayland;
 namespace NWayland;
 
-public class WlEventQueue : IDisposable
+public class WlEventQueue : IDisposable, IWlTargetQueue
 {
     private IntPtr _handle;
     private readonly WlDisplay _display;
-    private bool _disposed;
+    // volatile for fast-path checks ONLY — authoritative reads are under DispatchLock
+    private volatile bool _disposed;
+    private readonly HashSet<WlProxy> _proxies = new();
 
     internal IntPtr Handle => _disposed ? throw new ObjectDisposedException(nameof(WlEventQueue)) : _handle;
-    internal object DispatchLock = new object();
+    internal WlDisplay Display => _display;
+    internal QueueDispatchLock DispatchLock;
+
+    IntPtr IWlTargetQueue.QueueHandle => Handle;
+    WlDisplay IWlTargetQueue.Display => _display;
+    WlEventQueue? IWlTargetQueue.ManagedQueue => this;
+    QueueDispatchLock IWlTargetQueue.DispatchLock => DispatchLock;
     
     internal WlEventQueue(WlDisplay display)
     {
         _display = display ?? throw new ArgumentNullException(nameof(display));
-        
-        _handle = LibWayland.wl_display_create_queue(display.Handle);
-        if (_handle == IntPtr.Zero)
-            throw new NWaylandException("Failed to create Wayland event queue");
+
+        lock (display.SyncRoot)
+        {
+            if (display.IsDisposing)
+                throw new ObjectDisposedException(nameof(WlDisplay));
+            
+            _handle = LibWayland.wl_display_create_queue(display.Handle);
+            if (_handle == IntPtr.Zero)
+                throw new NWaylandException("Failed to create Wayland event queue");
+
+            DispatchLock = new QueueDispatchLock(display,
+                throwOnViolation: display.Options.EnableDebugChecks,
+                queueHandle: _handle);
+
+            display.RegisterQueue(this);
+        }
+    }
+
+    internal void RegisterProxy(WlProxy proxy)
+    {
+        Debug.Assert(DispatchLock.IsEntered || Monitor.IsEntered(_display.SyncRoot),
+            "RegisterProxy must be called under DispatchLock or SyncRoot");
+        lock (_display.SyncRoot)
+            _proxies.Add(proxy);
+    }
+
+    internal void UnregisterProxy(WlProxy proxy)
+    {
+        Debug.Assert(DispatchLock.IsEntered || Monitor.IsEntered(_display.SyncRoot),
+            "UnregisterProxy must be called under DispatchLock or SyncRoot");
+        lock (_display.SyncRoot)
+            _proxies.Remove(proxy);
     }
     
 
@@ -31,7 +70,8 @@ public class WlEventQueue : IDisposable
     /// <returns>The number of dispatched events on success or -1 on failure</returns>
     public int DispatchPending()
     {
-        lock(DispatchLock)
+        using (DispatchLock.LockAndCheckDisplayDispose())
+        using (new LibWayland.ListenerExceptionScope())
             return LibWayland.wl_display_dispatch_queue_pending(_display.Handle, Handle);
     }
 
@@ -70,7 +110,8 @@ public class WlEventQueue : IDisposable
     /// <seealso cref="PrepareRead"/>
     public int Dispatch()
     {
-        lock (DispatchLock)
+        using (DispatchLock.LockAndCheckDisplayDispose())
+        using (new LibWayland.ListenerExceptionScope())
             return LibWayland.wl_display_dispatch_queue(_display.Handle, Handle);
     }
 
@@ -110,7 +151,11 @@ public class WlEventQueue : IDisposable
     /// <see cref="WlDisplay.ReadEvents"/>, only one (at random) eventually reads and queues the events 
     /// and the others are sleeping meanwhile. This way we avoid races and still can read from more threads.
     /// </remarks>
-    public int PrepareRead() => LibWayland.wl_display_prepare_read_queue(_display.Handle, Handle);
+    public int PrepareRead()
+    {
+        using (DispatchLock.LockAndCheckDisplayDispose())
+            return LibWayland.wl_display_prepare_read_queue(_display.Handle, Handle);
+    }
 
     /// <summary>
     /// Block until all pending requests are processed by the server on the specified event queue.
@@ -130,12 +175,14 @@ public class WlEventQueue : IDisposable
     /// <seealso cref="WlDisplay.Roundtrip"/>
     public int Roundtrip()
     {
-        lock (DispatchLock)
+        using (DispatchLock.LockAndCheckDisplayDispose())
+        using (new LibWayland.ListenerExceptionScope())
             return LibWayland.wl_display_roundtrip_queue(_display.Handle, Handle);
     }
 
     /// <summary>
     /// Destroy the given event queue. Any pending event on that queue is discarded.
+    /// Proxies assigned to this queue are moved back to the default queue.
     /// </summary>
     /// <remarks>
     /// The <seealso cref="WlDisplay"/> object used to create the queue should not be destroyed
@@ -143,25 +190,34 @@ public class WlEventQueue : IDisposable
     /// </remarks>
     public void Dispose()
     {
-        lock (_display.SyncRoot)
+        // Lock order: display dispatch lock first, queue dispatch lock second
+        using (_display.DispatchLock.Lock())
+        using (DispatchLock.Lock())
         {
-            if (!_disposed)
+            if (_disposed)
+                return;
+            _disposed = true;
+
+            lock (_display.SyncRoot)
             {
+                foreach (var proxy in _proxies)
+                {
+                    if (!proxy.IsDisposed)
+                    {
+                        LibWayland.wl_proxy_set_queue(proxy.Handle, IntPtr.Zero);
+                        proxy.SetQueueInternal(null);
+                    }
+                }
+                _proxies.Clear();
+
+                _display.UnregisterQueue(this);
+
                 if (_handle != IntPtr.Zero)
                 {
                     LibWayland.wl_event_queue_destroy(_handle);
                     _handle = IntPtr.Zero;
                 }
-
-                _disposed = true;
             }
-
-            GC.SuppressFinalize(this);
         }
-    }
-
-    ~WlEventQueue()
-    {
-        Dispose();
     }
 }

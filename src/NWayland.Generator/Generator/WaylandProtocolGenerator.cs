@@ -168,7 +168,7 @@ namespace NWayland.Generator
                             Argument(IdentifierName("context")),
                         })))));
                 cl = cl.AddMembers(ParseMemberDeclaration(@$"
-                public static {cl.Identifier} Import(WlDisplay display, WlEventQueue? queue, IntPtr handle, bool ownsHandle, IWlEventsListener? listener)
+                public static {cl.Identifier} Import(WlDisplay display, IWlTargetQueue? queue, IntPtr handle, bool ownsHandle, IWlEventsListener? listener)
                 {{
                     return ({cl.Identifier})WlProxy.Import(ProxyType, display, queue, handle, ownsHandle, listener);
                 }}")!);

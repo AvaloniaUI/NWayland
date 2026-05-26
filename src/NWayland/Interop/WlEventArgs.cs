@@ -116,6 +116,9 @@ unsafe class WlEventArgsImpl : IWlEventArgsImpl
 
     public int GetFd(int num)
     {
+        if (Message.Arguments[num].Code != WaylandArgumentCodes.Fd)
+            throw new InvalidOperationException(
+                $"Argument {num} is {Message.Arguments[num].Code}, not Fd");
         var bit = 1ul << num;
         if ((_consumed & bit) != 0)
             throw new InvalidOperationException("FD already consumed");
@@ -125,6 +128,9 @@ unsafe class WlEventArgsImpl : IWlEventArgsImpl
 
     public void CloseFd(int num)
     {
+        if (Message.Arguments[num].Code != WaylandArgumentCodes.Fd)
+            throw new InvalidOperationException(
+                $"Argument {num} is {Message.Arguments[num].Code}, not Fd");
         var bit = 1ul << num;
         if ((_consumed & bit) != 0)
             return;
@@ -158,7 +164,7 @@ unsafe class WlEventArgsImpl : IWlEventArgsImpl
         if (Message.Arguments[num].Code == WaylandArgumentCodes.Object)
         {
             // TODO: emphemeral proxies that we auto-dispose on exit
-            return (T?)LibWayland.FindByNative(_proxy.Display, proxyPtr);
+            return (T?)_proxy.Display.FindByNative(proxyPtr);
         }
         throw new InvalidOperationException();
     }
@@ -174,12 +180,21 @@ unsafe class WlEventArgsImpl : IWlEventArgsImpl
             throw new InvalidOperationException("Already consumed");
         if (Message.Arguments[num].Code == WaylandArgumentCodes.NewId)
         {
-            var proxy = Message.Arguments[num].ProxyType!.Factory(
-                new WlProxyCreationContext(_proxy.Display, _proxy.Queue,
-                    Message.Arguments[num].ProxyType!.Interface,
-                    proxyPtr, true, listener))!;
             _consumed |= bit;
-            return proxy;
+            var proxyHandle = new WlProxyHandle(proxyPtr, ownsHandle: true);
+            try
+            {
+                var proxy = Message.Arguments[num].ProxyType!.Factory(
+                    new WlProxyCreationContext(_proxy.Display, _proxy.Queue,
+                        Message.Arguments[num].ProxyType!.Interface,
+                        proxyHandle, listener))!;
+                return proxy;
+            }
+            catch
+            {
+                proxyHandle.Dispose();
+                throw;
+            }
         }
         throw new InvalidOperationException();
     }
@@ -208,14 +223,26 @@ unsafe class WlEventArgsImpl : IWlEventArgsImpl
             if ((_consumed & bit) != 0)
                 continue;
 
-            switch (Message.Arguments[c].Code)
+            try
             {
-                case WaylandArgumentCodes.NewId:
-                    GetNewIdProxy(c, null).Dispose();
-                    break;
-                case WaylandArgumentCodes.Fd:
-                    CloseFd(c);
-                    break;
+                switch (Message.Arguments[c].Code)
+                {
+                    case WaylandArgumentCodes.NewId:
+                        // Destroy unconsumed server-created proxy directly instead of
+                        // creating a full managed WlProxy (avoids map registration churn)
+                        var newIdPtr = Raw(c).IntPtr;
+                        if (newIdPtr != IntPtr.Zero)
+                            LibWayland.wl_proxy_destroy(newIdPtr);
+                        break;
+                    case WaylandArgumentCodes.Fd:
+                        CloseFd(c);
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Trace.TraceWarning(
+                    $"WlEventArgs.Dispose: failed to clean up argument {c} ({Message.Arguments[c].Code}): {ex.Message}");
             }
         }
     }

@@ -1,12 +1,34 @@
 using System;
+using System.Collections.Generic;
 using NWayland.Interop;
 
 namespace NWayland.Protocols.Wayland
 {
-    public partial class WlDisplay
+    public partial class WlDisplay : IWlTargetQueue
     {
         internal object SyncRoot { get; } = new();
-        internal object DispatchLock { get; } = new();
+        internal QueueDispatchLock DispatchLock;
+        internal WlDisplayOptions Options { get; private set; } = new();
+        // volatile for fast-path checks ONLY — authoritative reads are under SyncRoot or DispatchLock
+        internal volatile bool IsDisposing;
+        private readonly HashSet<WlEventQueue> _queues = new();
+        private readonly Dictionary<uint, WlProxy> _proxyMap = new();
+        private readonly object _proxyMapLock = new();
+
+        IntPtr IWlTargetQueue.QueueHandle => IntPtr.Zero;
+        WlDisplay IWlTargetQueue.Display => this;
+        WlEventQueue? IWlTargetQueue.ManagedQueue => null;
+        QueueDispatchLock IWlTargetQueue.DispatchLock => DispatchLock;
+
+        private WlDisplay(IntPtr handle, WlDisplayOptions? options)
+            : this(new WlProxyCreationContext(null!, null, ProxyType.Interface,
+                new WlProxyHandle(handle, ownsHandle: true, WlProxyDestroyMethod.DisplayDisconnect), null))
+        {
+            Options = options ?? new WlDisplayOptions();
+            DispatchLock = new QueueDispatchLock(this, throwOnViolation: Options.EnableDebugChecks,
+                queueHandle: IntPtr.Zero);
+            LibWayland.RegisterDisplay(this);
+        }
         
         /// <summary>
         /// Connect to a Wayland display.
@@ -38,27 +60,33 @@ namespace NWayland.Protocols.Wayland
         /// absolute path. Support for absolute paths in <paramref name="name"/> and <c>WAYLAND_DISPLAY</c> is present since
         /// Wayland version 1.15.
         /// </para>
+        /// <para>
+        /// Note: <c>wl_display</c> uses libwayland's built-in dispatcher for its events (<c>error</c>, <c>delete_id</c>)
+        /// and does not support attaching a managed listener. Use the generated <c>Listener</c> class only for reference.
+        /// </para>
         /// </remarks>
-        public static WlDisplay Connect(WlDisplay.Listener? listener = null, string? name = null)
+        public static WlDisplay Connect(string? name = null,
+            WlDisplayOptions? options = null)
         {
             var handle = LibWayland.wl_display_connect(name);
             if (handle == IntPtr.Zero)
                 throw new NWaylandException("Failed to connect to wayland display");
-            return new WlDisplay(new WlProxyCreationContext(null!, // special case
-                null, ProxyType.Interface, handle, true, listener));
+            return new WlDisplay(handle, options);
         }
 
         /// <summary>
         /// Connect to a Wayland display using an already-opened file descriptor.
         /// Useful for testing with socketpair or when the socket is provided externally.
         /// </summary>
-        public static WlDisplay ConnectToFd(int fd, WlDisplay.Listener? listener = null)
+        public static WlDisplay ConnectToFd(int fd,
+            WlDisplayOptions? options = null)
         {
+            if (fd < 0)
+                throw new ArgumentOutOfRangeException(nameof(fd), "File descriptor must be non-negative");
             var handle = LibWayland.wl_display_connect_to_fd(fd);
             if (handle == IntPtr.Zero)
                 throw new NWaylandException("Failed to connect to wayland display via fd");
-            return new WlDisplay(new WlProxyCreationContext(null!, // special case
-                null, ProxyType.Interface, handle, true, listener));
+            return new WlDisplay(handle, options);
         }
         
         /// <summary>
@@ -68,7 +96,17 @@ namespace NWayland.Protocols.Wayland
         /// <remarks>
         /// Returns the file descriptor associated with a display so it can be integrated into the client's main loop.
         /// </remarks>
-        public int GetFd() => LibWayland.wl_display_get_fd(Handle);
+        public int GetFd()
+        {
+            if (_isDisposed) // volatile fast-path
+                throw new ObjectDisposedException(nameof(WlDisplay));
+            lock (SyncRoot)
+            {
+                if (_isDisposed)
+                    throw new ObjectDisposedException(nameof(WlDisplay));
+                return LibWayland.wl_display_get_fd(Handle);
+            }
+        }
 
         /// <summary>
         /// Process incoming events on the default event queue.
@@ -101,7 +139,8 @@ namespace NWayland.Protocols.Wayland
         /// <seealso cref="WlDisplay.ReadEvents"/>
         public int Dispatch()
         {
-            lock (DispatchLock)
+            using (DispatchLock.LockAndCheckDisplayDispose())
+            using (new LibWayland.ListenerExceptionScope())
                 return LibWayland.wl_display_dispatch(Handle);
         }
 
@@ -119,7 +158,8 @@ namespace NWayland.Protocols.Wayland
         /// <seealso cref="WlDisplay.Flush"/>
         public int DispatchPending()
         {
-            lock (DispatchLock)
+            using (DispatchLock.LockAndCheckDisplayDispose())
+            using (new LibWayland.ListenerExceptionScope())
                 return LibWayland.wl_display_dispatch_pending(Handle);
         }
 
@@ -137,7 +177,8 @@ namespace NWayland.Protocols.Wayland
         /// <returns>The number of dispatched events on success or -1 on failure</returns>
         public int Roundtrip()
         {
-            lock (DispatchLock)
+            using (DispatchLock.LockAndCheckDisplayDispose())
+            using (new LibWayland.ListenerExceptionScope())
                 return LibWayland.wl_display_roundtrip(Handle);
         }
 
@@ -149,7 +190,11 @@ namespace NWayland.Protocols.Wayland
         /// This function does the same thing as <see cref="WlEventQueue.PrepareRead"/> with the default queue passed as the queue.
         /// </remarks>
         /// <seealso cref="WlEventQueue.PrepareRead"/>
-        public int PrepareRead() => LibWayland.wl_display_prepare_read(Handle);
+        public int PrepareRead()
+        {
+            using (DispatchLock.LockAndCheckDisplayDispose())
+                return LibWayland.wl_display_prepare_read(Handle);
+        }
 
         /// <summary>
         /// Read events from the display file descriptor and queue them on their corresponding event queues.
@@ -182,12 +227,27 @@ namespace NWayland.Protocols.Wayland
         /// <seealso cref="WlDisplay.CancelRead"/>
         /// <seealso cref="WlDisplay.DispatchPending"/>
         /// <seealso cref="WlDisplay.Dispatch"/>
-        public int ReadEvents() => LibWayland.wl_display_read_events(Handle);
+        public int ReadEvents()
+        {
+            // Use Lock() instead of LockAndCheckDisplayDispose() to honor the
+            // prepare_read/read_events contract: every successful PrepareRead must be
+            // followed by either ReadEvents or CancelRead. Throwing ODE here would
+            // leak libwayland's internal reader count and deadlock other threads.
+            // The native call returns -1 on a shut-down socket, which is safe.
+            using (DispatchLock.Lock())
+            {
+                // _isDisposed means the display is fully torn down (socket disconnected,
+                // all queues destroyed). The dispatch lock we just acquired is already dead
+                // at this point — there is no reader count to leak.
+                if (_isDisposed)
+                    throw new ObjectDisposedException(GetType().FullName);
+                return LibWayland.wl_display_read_events(Handle);
+            }
+        }
 
         /// <summary>
         /// Send all buffered requests on the display to the server.
         /// </summary>
-        /// <param name="display">The display context object.</param>
         /// <returns>The number of bytes sent on success or -1 on failure.</returns>
         /// <remarks>
         /// Sends all buffered data on the client side to the server.
@@ -201,7 +261,11 @@ namespace NWayland.Protocols.Wayland
         /// In that case, use <c>poll</c> on the display file descriptor to wait for it to become writable again.
         /// </para>
         /// </remarks>
-        public int Flush() => LibWayland.wl_display_flush(Handle);
+        public int Flush()
+        {
+            using (DispatchLock.LockAndCheckDisplayDispose())
+                return LibWayland.wl_display_flush(Handle);
+        }
 
         
         /// <summary>
@@ -213,27 +277,137 @@ namespace NWayland.Protocols.Wayland
         /// </remarks>
         /// <seealso cref="PrepareRead"/>
         /// <seealso cref="ReadEvents"/>
-        public void CancelRead() => LibWayland.wl_display_cancel_read(Handle);
+        public void CancelRead()
+        {
+            if (_isDisposed) // volatile fast-path
+                return;
+            using (DispatchLock.Lock())
+            {
+                if (_isDisposed)
+                    return;
+                LibWayland.wl_display_cancel_read(Handle);
+            }
+        }
+
+        // Called by WlEventQueue ctor (under SyncRoot — Monitor is reentrant)
+        internal void RegisterQueue(WlEventQueue queue)
+        {
+            lock (SyncRoot)
+                _queues.Add(queue);
+        }
+
+        // Called by WlEventQueue.Dispose — under SyncRoot
+        internal void UnregisterQueue(WlEventQueue queue)
+        {
+            lock (SyncRoot)
+                _queues.Remove(queue);
+        }
+
+        internal uint RegisterProxy(WlProxy proxy, bool setDispatcher)
+        {
+            lock (_proxyMapLock)
+            {
+                uint id;
+                if (setDispatcher)
+                    id = LibWayland.SetupProxyDispatcher(proxy);
+                else
+                    id = LibWayland.GetProxyId(proxy.Handle);
+                _proxyMap[id] = proxy;
+                return id;
+            }
+        }
+
+        internal void UnregisterProxy(WlProxy proxy)
+        {
+            lock (_proxyMapLock)
+            {
+                if (_proxyMap.TryGetValue(proxy.Id, out var current) && ReferenceEquals(current, proxy))
+                    _proxyMap.Remove(proxy.Id);
+            }
+        }
+
+        internal WlProxy? FindByNative(IntPtr proxyHandle)
+        {
+            if (proxyHandle == IntPtr.Zero)
+                return null;
+            lock (_proxyMapLock)
+            {
+                var id = LibWayland.GetProxyId(proxyHandle);
+                _proxyMap.TryGetValue(id, out var target);
+                return target;
+            }
+        }
+
+        internal List<WlProxy> GetAllProxies()
+        {
+            lock (_proxyMapLock)
+                return new List<WlProxy>(_proxyMap.Values);
+        }
 
         /// <summary>
         /// Creates a new Wayland event queue for the specified display.
         /// </summary>
-        /// <exception cref="ArgumentNullException">Thrown if display is null.</exception>
+        /// <exception cref="ObjectDisposedException">Thrown if the display is being disposed.</exception>
         /// <exception cref="NWaylandException">Thrown if the native event queue creation fails.</exception>
-        public WlEventQueue CreateEventQueue() => new(this);
-
-        protected override void Dispose(bool disposing)
+        public WlEventQueue CreateEventQueue()
         {
-            if (!disposing)
+            return new WlEventQueue(this);
+        }
+
+        public override void Dispose()
+        {
+            if (_isDisposed)
                 return;
+
+            // Step 1: Set IsDisposing under SyncRoot to prevent new dispatch/invoke/queue creation
             lock (SyncRoot)
             {
-                if (_isDisposed)
+                if (_isDisposed || IsDisposing)
                     return;
-                _isDisposed = true;
+                IsDisposing = true;
+
+                // Step 2: Shutdown socket to unblock pending readers (owned only)
+                if (_proxyHandle.OwnsHandle)
+                    Syscall.shutdown(GetFd(), Syscall.SHUT_RDWR);
             }
-            if (_ownsHandle)
-                LibWayland.wl_display_disconnect(Handle);
+
+            // Step 3: Dispose queues one-by-one. Each Q.Dispose() acquires display.DL → Q.DL,
+            // which serializes with any in-flight default-queue dispatch that might touch
+            // custom-queue proxies in callbacks. No need to hold display.DL here.
+            while (true)
+            {
+                WlEventQueue? nextQueue;
+                lock (SyncRoot)
+                {
+                    using var enumerator = _queues.GetEnumerator();
+                    if (!enumerator.MoveNext())
+                        break;
+                    nextQueue = enumerator.Current;
+                }
+                nextQueue.Dispose();
+            }
+
+            // Step 4: Dispose remaining proxies from per-display map
+            using (DispatchLock.Lock())
+            {
+                lock (SyncRoot)
+                {
+                    var proxies = GetAllProxies();
+                    foreach (var proxy in proxies)
+                    {
+                        if (!proxy.IsDisposed && proxy != this)
+                        {
+                            proxy.SetQueueInternal(null);
+                            proxy.Dispose();
+                        }
+                    }
+                    _isDisposed = true;
+                }
+            }
+
+            // Step 5: Unregister display and disconnect (handled by WlProxyHandle if owned)
+            LibWayland.UnregisterDisplay(this);
+            _proxyHandle.Dispose();
         }
         
         public INWaylandTracer? Tracer { get; set; }

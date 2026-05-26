@@ -55,5 +55,7 @@ namespace NWayland
         public static bool operator >(WlFixed left, WlFixed right) => left._value > right._value;
 
         public static bool operator >=(WlFixed left, WlFixed right) => left._value >= right._value;
+
+        public override string ToString() => ((double)this).ToString("G");
     }
 }
