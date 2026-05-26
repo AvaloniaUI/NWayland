@@ -1,5 +1,8 @@
 <Project>
     <Import Project="$(MSBuildThisFileDirectory)NWayland.Generator.targets"/>
+    <PropertyGroup>
+        <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    </PropertyGroup>
     <ItemGroup>
         <ProjectReference Include="$(MSBuildThisFileDirectory)NWayland.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false"/>
     </ItemGroup>

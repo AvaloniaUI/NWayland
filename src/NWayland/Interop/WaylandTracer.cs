@@ -1,3 +1,4 @@
+using System;
 using NWayland.Interop;
 using NWayland.Protocols.Wayland;
 
@@ -6,28 +7,39 @@ namespace NWayland;
 static class WaylandTracer
 {
 
-    static object[] ConvertAargs(WlMessageDescription msg, WlEventArgs args)
+    static WlTracedArgument[] ConvertArgs(WlMessageDescription msg, WlEventArgs args)
     {
-        var oargs = new object[msg.Arguments.Count];
+        var traced = new WlTracedArgument[msg.Arguments.Count];
         for (var c = 0; c < msg.Arguments.Count; c++)
         {
             var desc = msg.Arguments[c];
 
-            if (desc.Code is WaylandArgumentCodes.Fd or WaylandArgumentCodes.Int32)
-                oargs[c] = args.GetInt32(c);
-            else if (desc.Code == WaylandArgumentCodes.UInt32)
-                oargs[c] = args.GetUInt32(c);
-            else if (desc.Code == WaylandArgumentCodes.String)
-                oargs[c] = args.GetString(c)!;
-            else if (desc.Code is WaylandArgumentCodes.NewId or WaylandArgumentCodes.Object)
-                oargs[c] = "[Object]";
-            else if (desc.Code == WaylandArgumentCodes.Array)
-                oargs[c] = "[Array]";
-            else if (desc.Code == WaylandArgumentCodes.Fixed)
-                oargs[c] = args.GetWlFixed(c);
+            switch (desc.Code)
+            {
+                case WaylandArgumentCodes.Fd:
+                case WaylandArgumentCodes.Int32:
+                    traced[c] = new WlTracedArgument { Int32 = args.GetInt32(c) };
+                    break;
+                case WaylandArgumentCodes.UInt32:
+                case WaylandArgumentCodes.NewId:
+                    traced[c] = new WlTracedArgument { UInt32 = args.GetUInt32(c) };
+                    break;
+                case WaylandArgumentCodes.String:
+                    traced[c] = new WlTracedArgument { Object = args.GetString(c) };
+                    break;
+                case WaylandArgumentCodes.Object:
+                    traced[c] = new WlTracedArgument { UInt32 = args.GetUInt32(c) };
+                    break;
+                case WaylandArgumentCodes.Array:
+                    traced[c] = new WlTracedArgument { Object = null };
+                    break;
+                case WaylandArgumentCodes.Fixed:
+                    traced[c] = new WlTracedArgument { Fixed = args.GetWlFixed(c) };
+                    break;
+            }
         }
 
-        return oargs;
+        return traced;
     }
     
     public static void TraceEvent(WlDisplay display, WlEventArgs args)
@@ -35,9 +47,10 @@ static class WaylandTracer
         if (display.Tracer == null)
             return;
 
-        var ev = args.Sender.Interface.Events[(int)args.Opcode];
+        var sender = (WlProxy)args.Sender;
+        var ev = sender.Interface.Events[(int)args.Opcode];
         
-        display.Tracer.Trace(args.Sender, true, false, ev.Name, ConvertAargs(ev, args));
+        display.Tracer.Trace(sender, true, false, ev, ConvertArgs(ev, args));
     }
 
     public static unsafe void TraceCall(WlProxy wlProxy, WaylandCallBuilder call, WlArgument* args)
@@ -48,8 +61,7 @@ static class WaylandTracer
         
         var msg =  wlProxy.Interface.Methods[(int)call.OpCode];
         var eargs = new WlEventArgs(new WlEventArgsImpl(args, wlProxy, call.OpCode, msg));
-        var oargs = ConvertAargs(msg, eargs);
-        tracer.Trace(wlProxy, false, msg.IsDestructor, msg.Name, oargs);
+        tracer.Trace(wlProxy, false, msg.IsDestructor, msg, ConvertArgs(msg, eargs));
     }
 
     public static void TraceDestroy(WlProxy wlProxy, bool isFromFinalizer, bool nativeCallSkipped)
@@ -64,6 +76,7 @@ static class WaylandTracer
 
 public interface INWaylandTracer
 {
-    void Trace(WlProxy sender, bool isEvent, bool isDestructor, string name, object[] args);
+    void Trace(WlProxy sender, bool isEvent, bool isDestructor, WlMessageDescription method,
+        ReadOnlySpan<WlTracedArgument> args);
     void TraceDestroy(WlProxy proxy, bool isFromFinalizer, bool nativeCallSkipped);
 }

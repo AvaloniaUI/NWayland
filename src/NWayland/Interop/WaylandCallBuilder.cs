@@ -5,6 +5,14 @@ using NWayland.Protocols.Wayland;
 
 namespace NWayland.Interop;
 
+public interface IWaylandCallTarget
+{
+    internal void Invoke(ref WaylandCallBuilder call);
+
+    internal object InvokeNewId(ref WaylandCallBuilder call, WlProxyTypeDescriptor proxyType,
+        IWlEventsListener? listener, WlEventQueue? queue, uint? newIdVersion);
+}
+
 public ref struct WaylandCallBuilder : IDisposable
 {
     [ThreadStatic] private static Stack<List<WlArgument>>? _normalArgsPool;
@@ -29,10 +37,10 @@ public ref struct WaylandCallBuilder : IDisposable
 
     internal List<WlArgument>? NormalArgs;
     internal List<object?>? ObjectArgs;
-    private WlProxy _target;
+    private IWaylandCallTarget _target;
     internal uint OpCode;
 
-    public static WaylandCallBuilder Create(WlProxy target, uint opcode)
+    public static WaylandCallBuilder Create(IWaylandCallTarget target, uint opcode)
     {
         return new WaylandCallBuilder()
         {
@@ -47,6 +55,8 @@ public ref struct WaylandCallBuilder : IDisposable
     }
 
     public void Arg(WlProxy? arg) => ObjectArg(arg);
+
+    public void Arg(NWayland.Server.WlResource? arg) => ObjectArg(arg);
     
     public void Arg(string arg) => ObjectArg(arg);
 
@@ -79,9 +89,9 @@ public ref struct WaylandCallBuilder : IDisposable
         _target.Invoke(ref this);
     }
 
-    public WlProxy InvokeNewId(WlProxyTypeDescriptor proxyType, IWlEventsListener? listener, WlEventQueue? queue, uint? version = null)
+    public T InvokeNewId<T>(IWlEventsListener? listener, WlEventQueue? queue, uint? version = null) where T : IWlProxyTypeDescriptorProvider
     {
-        return _target.InvokeNewId(ref this, proxyType, listener, queue, version);
+        return (T)_target.InvokeNewId(ref this, T.ProxyType, listener, queue, version);
     }
     
     public void Dispose()

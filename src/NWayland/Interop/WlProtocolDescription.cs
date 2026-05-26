@@ -142,7 +142,20 @@ public class WlMessageDescription
 
 public delegate WlProxy WlProxyFactory(WlProxyCreationContext context);
 
-public record WlProxyTypeDescriptor(WlInterfaceDescription Interface, Type ProxyType, WlProxyFactory Factory, bool Frozen = false);
+public delegate NWayland.Server.WlResource WlResourceFactory(NWayland.Server.WlResourceCreationContext context);
+
+public record WlProxyTypeDescriptor(
+    WlInterfaceDescription Interface,
+    Type ProxyType,
+    WlProxyFactory Factory,
+    bool Frozen = false,
+    Type? ServerResourceType = null,
+    WlResourceFactory? ServerFactory = null);
+
+public interface IWlProxyTypeDescriptorProvider
+{
+    static abstract WlProxyTypeDescriptor ProxyType { get; } 
+}
 
 public record class WlMessageArgumentDescription
 {

@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<protocol name="test_serialization">
+  <copyright>
+    Test protocol for NWayland serialization tests.
+  </copyright>
+
+  <interface name="test_parent" version="1">
+    <description summary="Parent interface for object references">
+      Used as a target for object and new_id argument types.
+    </description>
+
+    <!-- Server → Client events (test client-side deserialization) -->
+
+    <event name="integers">
+      <description summary="Event with int and uint args"/>
+      <arg name="signed_val" type="int"/>
+      <arg name="unsigned_val" type="uint"/>
+    </event>
+
+    <event name="fixed_point">
+      <description summary="Event with fixed-point arg"/>
+      <arg name="value" type="fixed"/>
+    </event>
+
+    <event name="string_event">
+      <description summary="Event with string arg"/>
+      <arg name="text" type="string"/>
+    </event>
+
+    <event name="array_event">
+      <description summary="Event with array arg"/>
+      <arg name="data" type="array"/>
+    </event>
+
+    <event name="fd_event">
+      <description summary="Event with file descriptor arg"/>
+      <arg name="fd" type="fd"/>
+    </event>
+
+    <event name="object_event">
+      <description summary="Event with object arg"/>
+      <arg name="obj" type="object" interface="test_child" allow-null="true"/>
+    </event>
+
+    <event name="new_id_event">
+      <description summary="Event that creates a new object"/>
+      <arg name="id" type="new_id" interface="test_child"/>
+    </event>
+
+    <event name="mixed_event">
+      <description summary="Event with multiple arg types combined"/>
+      <arg name="i" type="int"/>
+      <arg name="u" type="uint"/>
+      <arg name="f" type="fixed"/>
+      <arg name="s" type="string"/>
+      <arg name="a" type="array"/>
+    </event>
+
+    <event name="multi_fd_event">
+      <description summary="Event with multiple file descriptors"/>
+      <arg name="fd1" type="fd"/>
+      <arg name="fd2" type="fd"/>
+      <arg name="label" type="string"/>
+    </event>
+
+    <!-- Client → Server requests (test server-side deserialization) -->
+
+    <request name="send_integers">
+      <description summary="Request with int and uint args"/>
+      <arg name="signed_val" type="int"/>
+      <arg name="unsigned_val" type="uint"/>
+    </request>
+
+    <request name="send_fixed">
+      <description summary="Request with fixed-point arg"/>
+      <arg name="value" type="fixed"/>
+    </request>
+
+    <request name="send_string">
+      <description summary="Request with string arg"/>
+      <arg name="text" type="string"/>
+    </request>
+
+    <request name="send_array">
+      <description summary="Request with array arg"/>
+      <arg name="data" type="array"/>
+    </request>
+
+    <request name="send_fd">
+      <description summary="Request with file descriptor arg"/>
+      <arg name="fd" type="fd"/>
+    </request>
+
+    <request name="send_object">
+      <description summary="Request with object arg"/>
+      <arg name="obj" type="object" interface="test_child" allow-null="true"/>
+    </request>
+
+    <request name="send_new_id">
+      <description summary="Request that creates a new object"/>
+      <arg name="id" type="new_id" interface="test_child"/>
+    </request>
+
+    <request name="send_mixed">
+      <description summary="Request with multiple arg types combined"/>
+      <arg name="i" type="int"/>
+      <arg name="u" type="uint"/>
+      <arg name="f" type="fixed"/>
+      <arg name="s" type="string"/>
+      <arg name="a" type="array"/>
+    </request>
+
+    <request name="send_multi_fd">
+      <description summary="Request with multiple file descriptors"/>
+      <arg name="fd1" type="fd"/>
+      <arg name="fd2" type="fd"/>
+      <arg name="label" type="string"/>
+    </request>
+
+    <request name="destroy" type="destructor">
+      <description summary="Destroy this object"/>
+    </request>
+  </interface>
+
+  <interface name="test_child" version="1">
+    <description summary="Child interface for new_id/object tests">
+      Simple interface created via new_id args.
+    </description>
+
+    <event name="value">
+      <description summary="Send a value to the client"/>
+      <arg name="val" type="uint"/>
+    </event>
+
+    <request name="set_value">
+      <description summary="Set a value on the server"/>
+      <arg name="val" type="uint"/>
+    </request>
+
+    <request name="destroy" type="destructor">
+      <description summary="Destroy this object"/>
+    </request>
+  </interface>
+</protocol>

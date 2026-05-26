@@ -6,9 +6,10 @@ namespace NWayland.Protocols.Wayland
 {
     public unsafe partial class WlRegistry
     {
-        public T Bind<T>(uint name, WlProxyTypeDescriptor type, uint version, IWlEventsListener? listener = null,
-            WlEventQueue? queue = null) where T : WlProxy
+        public T Bind<T>(uint name, uint version, IWlEventsListener? listener = null,
+            WlEventQueue? queue = null) where T : WlProxy, IWlProxyTypeDescriptorProvider
         {
+            var type = T.ProxyType;
             var iface = type.Interface;
             if (iface.Version < version)
                 throw new ArgumentException(
@@ -19,7 +20,7 @@ namespace NWayland.Protocols.Wayland
             call.Arg(iface.Name);
             call.Arg(version);
             call.ArgNewId();
-            return (T)call.InvokeNewId(type, listener, queue, version);
+            return call.InvokeNewId<T>(listener, queue, version);
         }
     }
 }

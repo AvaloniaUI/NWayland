@@ -13,6 +13,19 @@ namespace NWayland.Generator
     {
         private ExpressionSyntax GenerateWlMessage(WaylandProtocolMessage msg)
         {
+            // The consumed-FD/consumed-NewId bitmask in WlEventArgsImpl/ServerWlEventArgsImpl
+            // uses a ulong (64 bits). Reject messages with >= 64 effective arguments
+            // (including synthetic args for untyped new_id).
+            int effectiveArgCount = 0;
+            foreach (var arg in msg.Arguments ?? Array.Empty<WaylandProtocolArgument>())
+            {
+                if (arg is { Type: WaylandArgumentTypes.NewId, Interface: null })
+                    effectiveArgCount += 2; // synthetic string + uint before the new_id
+                effectiveArgCount++;
+            }
+            if (effectiveArgCount >= 64)
+                throw CreateError($"Message '{msg.Name}' has {effectiveArgCount} effective arguments (max 63) — consumed bitmask is ulong");
+
             var message =
                 InvokeMemberCrLf(IdentifierName("global::NWayland.Interop.WlMessageDescription"),
                         "Create", MakeLiteralExpression(msg.Name))
@@ -109,7 +122,15 @@ namespace NWayland.Generator
                             Argument(IdentifierName("ctx")),
                         ])), null)
                     )),
-                    Argument(MakeLiteralExpression(iface.Frozen))
+                    Argument(MakeLiteralExpression(iface.Frozen)),
+                    Argument(TypeOfExpression(ParseTypeName(cl.Identifier.ToString() + ".Server"))),
+                    Argument(ParenthesizedLambdaExpression(ParameterList(SeparatedList([
+                            Parameter(Identifier("ctx")),
+                        ])), null,
+                        ObjectCreationExpression(ParseTypeName(cl.Identifier.ToString() + ".Server"), ArgumentList(SeparatedList([
+                            Argument(IdentifierName("ctx")),
+                        ])), null)
+                    ))
                 ])), null);
 
             cl = cl.AddMembers(PropertyDeclaration(descriptorType, "ProxyType")
@@ -153,7 +174,6 @@ namespace NWayland.Generator
                     .WithExpressionBody(ArrowExpressionClause(
                             InvokeMember(IdentifierName("registry"), "Bind<" + proxyTypeName + ">",
                                 IdentifierName("name"),
-                                IdentifierName("ProxyType"),
                                 IdentifierName("version"),
                                 IdentifierName("eventsListener"),
                                 IdentifierName("dispatchOnQueue")

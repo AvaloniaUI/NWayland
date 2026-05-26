@@ -13,6 +13,9 @@ namespace NWayland.Interop
         internal static extern IntPtr wl_display_connect(string? name);
 
         [DllImport(Wayland, SetLastError = true, ExactSpelling = true)]
+        internal static extern IntPtr wl_display_connect_to_fd(int fd);
+
+        [DllImport(Wayland, SetLastError = true, ExactSpelling = true)]
         internal static extern int wl_display_get_fd(IntPtr display);
 
         [DllImport(Wayland, SetLastError = true, ExactSpelling = true)]

@@ -105,8 +105,7 @@ namespace NWayland.Generator
             if (newIdArgument != null)
                 body.Add(ReturnStatement(
                     CastExpression(ParseTypeName(GetWlInterfaceTypeName(newIdArgument.Interface!)),
-                        InvokeMember(callId, "InvokeNewId",
-                            MemberAccess(IdentifierName(GetWlInterfaceTypeName(newIdArgument.Interface!)), "ProxyType"),
+                        InvokeMember(callId, $"InvokeNewId<{(IdentifierName(GetWlInterfaceTypeName(newIdArgument.Interface!)))}>",
                             IdentifierName("eventsListener"),
                             IdentifierName("dispatchOnQueue")
                         ))));

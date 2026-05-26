@@ -146,12 +146,14 @@ namespace NWayland.Generator
                         Token(SyntaxKind.UnsafeKeyword),
                         Token(SyntaxKind.PartialKeyword)))
                     .AddBaseListTypes(
-                        SimpleBaseType(ParseTypeName("WlProxy")));
+                        SimpleBaseType(ParseTypeName("WlProxy")),
+                        SimpleBaseType(ParseTypeName("global::NWayland.Interop.IWlProxyTypeDescriptorProvider")));
                 cl = WithSummary(cl, @interface.Description);
                 cl = WithSignature(cl, @interface);
                 cl = WithRequests(cl, protocol, @interface);
                 cl = WithEvents(cl, protocol, @interface);
                 cl = WithEnums(cl, protocol, @interface);
+                cl = WithServer(cl, protocol, @interface);
                 
                 cl = cl.AddMembers(ConstructorDeclaration(cl.Identifier)
                     .AddModifiers(Token(SyntaxKind.PrivateKeyword))

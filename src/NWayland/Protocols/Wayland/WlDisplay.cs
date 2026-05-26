@@ -47,6 +47,19 @@ namespace NWayland.Protocols.Wayland
             return new WlDisplay(new WlProxyCreationContext(null!, // special case
                 null, ProxyType.Interface, handle, true, listener));
         }
+
+        /// <summary>
+        /// Connect to a Wayland display using an already-opened file descriptor.
+        /// Useful for testing with socketpair or when the socket is provided externally.
+        /// </summary>
+        public static WlDisplay ConnectToFd(int fd, WlDisplay.Listener? listener = null)
+        {
+            var handle = LibWayland.wl_display_connect_to_fd(fd);
+            if (handle == IntPtr.Zero)
+                throw new NWaylandException("Failed to connect to wayland display via fd");
+            return new WlDisplay(new WlProxyCreationContext(null!, // special case
+                null, ProxyType.Interface, handle, true, listener));
+        }
         
         /// <summary>
         /// Get a display context's file descriptor.

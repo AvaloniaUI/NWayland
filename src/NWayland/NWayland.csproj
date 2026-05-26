@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net6.0</TargetFramework>
+        <TargetFramework>net8.0</TargetFramework>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <Nullable>enable</Nullable>
         <LangVersion>latest</LangVersion>
@@ -21,6 +21,10 @@
 
     <ItemGroup>
         <None Include="../../README.md" Pack="true" PackagePath="/" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="NWayland.Server, PublicKey=00240000048000001401000006020000002400005253413100080000010001009d4a96f07d6fc3b43481aa005986b45fefca0a51fafc3f4643ed4d92be727d72ae1e9e494bdd7b00e05bdec81bda51820f08197e0c29062206c1f94eb496de786e517df673abfd31db3f04f1e5b59f30740346157607f2c970568a8775d6453a3d06fb266d9dcf0492ec964f3062496390d91f96a3ad15afdbc46fcf28aefae45fe0e7e1e869c26cd565faad31243078105fc08d40f587115796ae07f92e3570419cbfdf71e8a3ebf7ce2d8bebcecac85126dfb95d974a802ce3e912eb49303b70149370b82246ee677448158057dd35ce7fece40572cdea5c6dcd0f5b0c2c47753fc30c8e166fce8594743c4ac5151558b569c658408aaa8de17eb951d3f7b0" />
     </ItemGroup>
 
     <ItemGroup Condition="'$(TargetFramework)'=='netstandard2.0'">

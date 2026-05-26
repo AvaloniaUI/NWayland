@@ -8,7 +8,7 @@ using NWayland.Protocols.Wayland;
 
 namespace NWayland
 {
-    public abstract unsafe class WlProxy : IDisposable
+    public abstract unsafe class WlProxy : IWaylandCallTarget, IDisposable
     {
         private readonly WlDisplay _display;
         private readonly WlInterfaceDescription _interface;
@@ -314,12 +314,12 @@ namespace NWayland
             }
         }
 
-        internal void Invoke(ref WaylandCallBuilder call)
+        void IWaylandCallTarget.Invoke(ref WaylandCallBuilder call)
         {
             InvokeCore(ref call, null, null, null, null);
         }
 
-        internal WlProxy InvokeNewId(ref WaylandCallBuilder call, WlProxyTypeDescriptor proxyType,
+        object IWaylandCallTarget.InvokeNewId(ref WaylandCallBuilder call, WlProxyTypeDescriptor proxyType,
             IWlEventsListener? listener, WlEventQueue? queue, uint? newIdVersion)
         {
             if (proxyType == null)

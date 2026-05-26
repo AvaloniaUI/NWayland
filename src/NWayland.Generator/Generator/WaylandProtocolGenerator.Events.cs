@@ -102,7 +102,7 @@ namespace NWayland.Generator
                         WaylandArgumentTypes.Int32 => "int",
                         WaylandArgumentTypes.UInt32 => "uint",
                         WaylandArgumentTypes.Fixed => "global::NWayland.WlFixed",
-                        WaylandArgumentTypes.FileDescriptor => "int",
+                        WaylandArgumentTypes.FileDescriptor => "global::NWayland.WaylandFd",
                         WaylandArgumentTypes.String => "string",
                         WaylandArgumentTypes.Object => GetWlInterfaceTypeNameOrWlProxy(arg.Interface),
                         WaylandArgumentTypes.Array =>
@@ -127,7 +127,7 @@ namespace NWayland.Generator
                     {
                         WaylandArgumentTypes.Int32 => "GetInt32",
                         WaylandArgumentTypes.UInt32 => "GetUInt32",
-                        WaylandArgumentTypes.FileDescriptor => "GetInt32",
+                        WaylandArgumentTypes.FileDescriptor => "GetFd",
                         WaylandArgumentTypes.Fixed => "GetWlFixed",
                         WaylandArgumentTypes.String => "GetString",
                         WaylandArgumentTypes.Object => $"GetProxy<{GetWlInterfaceTypeNameOrWlProxy(arg.Interface)}>",
