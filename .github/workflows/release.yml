@@ -15,9 +15,15 @@ jobs:
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '6.0.x'
+          dotnet-version: '8.0.x'
 
-      - name: Build, pack and push to NuGet
+      - name: Build
+        run: dotnet build -c Release
+
+      - name: Test
+        run: dotnet test -c Release --no-build --verbosity normal
+
+      - name: Pack and push to NuGet
         run: |
           VERSION="${GITHUB_REF_NAME#release/}"
           ./publish.sh "$VERSION" "${{ secrets.NUGET_API_KEY }}"
