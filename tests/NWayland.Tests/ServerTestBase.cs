@@ -11,12 +11,6 @@ namespace NWayland.Tests;
 /// </summary>
 public abstract class ServerTestBase : IDisposable
 {
-    private const int AF_UNIX = 1;
-    private const int SOCK_STREAM = 1;
-
-    [DllImport("libc", SetLastError = true)]
-    private static extern unsafe int socketpair(int domain, int type, int protocol, int* sv);
-
     [DllImport("libc", SetLastError = true)]
     protected static extern int pipe(int[] fds);
 
@@ -31,12 +25,15 @@ public abstract class ServerTestBase : IDisposable
     {
     }
 
-    protected static unsafe (int clientFd, int serverFd) CreateSocketPair()
+    /// <summary>
+    /// Creates a client-side fd with the server end immediately closed.
+    /// Useful for tests that need a <see cref="WlDisplay"/> without a real server.
+    /// </summary>
+    protected static int CreateClosedSocketClientFd()
     {
-        int* sv = stackalloc int[2];
-        if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv) < 0)
-            throw new InvalidOperationException($"socketpair failed: {Marshal.GetLastPInvokeError()}");
-        return (sv[0], sv[1]);
+        var (clientFd, serverFd) = WaylandServer.CreateSocketPair();
+        close(serverFd);
+        return clientFd;
     }
 
     protected class RegistryCapture : WlRegistry.Listener

@@ -23,8 +23,7 @@ public class SerializationTests : ServerTestBase
     private async Task<TestFixture> SetupBoundTestParent(TestParent.ServerListener? serverListener = null)
     {
         var server = new WaylandServer();
-        var (clientFd, serverFd) = CreateSocketPair();
-        var waylandClient = server.AddClient(serverFd);
+        var (waylandClient, clientFd) = server.CreateConnectedClient();
         waylandClient.AddGlobal("test_parent", 1);
 
         TestParent.Server? serverParent = null;
@@ -380,8 +379,7 @@ public class SerializationTests : ServerTestBase
     public async Task CustomEventAutoFlush()
     {
         var server = new WaylandServer();
-        var (clientFd, serverFd) = CreateSocketPair();
-        var waylandClient = server.AddClient(serverFd);
+        var (waylandClient, clientFd) = server.CreateConnectedClient();
         waylandClient.AddGlobal("test_parent", 1);
 
         TestParent.Server? serverParent = null;
@@ -722,8 +720,7 @@ public class SerializationTests : ServerTestBase
     {
         var tracer = new RecordingTracer();
         var server = new WaylandServer(new WaylandServerOptions { Tracer = tracer });
-        var (clientFd, serverFd) = CreateSocketPair();
-        var waylandClient = server.AddClient(serverFd);
+        var (waylandClient, clientFd) = server.CreateConnectedClient();
         waylandClient.AddGlobal("test_parent", 1);
 
         TestParent.Server? serverParent = null;
@@ -811,8 +808,7 @@ public class SerializationTests : ServerTestBase
     {
         var tracer = new RecordingTracer();
         var server = new WaylandServer(new WaylandServerOptions { Tracer = tracer });
-        var (clientFd, serverFd) = CreateSocketPair();
-        var waylandClient = server.AddClient(serverFd);
+        var (waylandClient, clientFd) = server.CreateConnectedClient();
         waylandClient.AddGlobal("test_parent", 1);
 
         TestParent.Server? serverParent = null;
@@ -899,8 +895,7 @@ public class SerializationTests : ServerTestBase
     {
         var tracer = new RecordingTracer();
         var server = new WaylandServer(new WaylandServerOptions { Tracer = tracer });
-        var (clientFd, serverFd) = CreateSocketPair();
-        var waylandClient = server.AddClient(serverFd);
+        var (waylandClient, clientFd) = server.CreateConnectedClient();
         waylandClient.AddGlobal("test_parent", 1);
 
         TestParent.Server? serverParent = null;
@@ -993,8 +988,7 @@ public class SerializationTests : ServerTestBase
     {
         var tracer = new RecordingTracer();
         var server = new WaylandServer(new WaylandServerOptions { Tracer = tracer });
-        var (clientFd, serverFd) = CreateSocketPair();
-        var waylandClient = server.AddClient(serverFd);
+        var (waylandClient, clientFd) = server.CreateConnectedClient();
         waylandClient.AddGlobal("test_parent", 1);
 
         TestParent.Server? serverParent = null;
@@ -1102,8 +1096,7 @@ public class SerializationTests : ServerTestBase
     {
         var tracer = new RecordingTracer();
         var server = new WaylandServer(new WaylandServerOptions { Tracer = tracer });
-        var (clientFd, serverFd) = CreateSocketPair();
-        var waylandClient = server.AddClient(serverFd);
+        var (waylandClient, clientFd) = server.CreateConnectedClient();
         waylandClient.AddGlobal("test_parent", 1);
 
         TestParent.Server? serverParent = null;

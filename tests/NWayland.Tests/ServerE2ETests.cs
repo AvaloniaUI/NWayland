@@ -17,9 +17,7 @@ public class ServerE2ETests : ServerTestBase
     public async Task SyncRoundtrip()
     {
         await using var server = new WaylandServer();
-        var (clientFd, serverFd) = CreateSocketPair();
-
-        var waylandClient = server.AddClient(serverFd);
+        var (waylandClient, clientFd) = server.CreateConnectedClient();
 
         // Server event loop (blocking, on background thread)
         var serverTask = Task.Run(() =>
@@ -47,9 +45,7 @@ public class ServerE2ETests : ServerTestBase
     public async Task RegistryGlobal()
     {
         await using var server = new WaylandServer();
-        var (clientFd, serverFd) = CreateSocketPair();
-
-        var waylandClient = server.AddClient(serverFd);
+        var (waylandClient, clientFd) = server.CreateConnectedClient();
 
         // Add a global before the client connects
         waylandClient.AddGlobal("wl_compositor", 5);
@@ -110,9 +106,7 @@ public class ServerE2ETests : ServerTestBase
     public async Task RegistryBind()
     {
         await using var server = new WaylandServer();
-        var (clientFd, serverFd) = CreateSocketPair();
-
-        var waylandClient = server.AddClient(serverFd);
+        var (waylandClient, clientFd) = server.CreateConnectedClient();
         waylandClient.AddGlobal("wl_compositor", 5);
 
         WlCompositor.Server? serverCompositor = null;
@@ -176,9 +170,7 @@ public class ServerE2ETests : ServerTestBase
     public async Task FdFloodingDisconnectsClient()
     {
         await using var server = new WaylandServer();
-        var (clientFd, serverFd) = CreateSocketPair();
-
-        var waylandClient = server.AddClient(serverFd);
+        var (waylandClient, clientFd) = server.CreateConnectedClient();
 
         // Wait for the disconnect event (blocking, on background thread)
         var serverTask = Task.Run(() =>
@@ -242,9 +234,7 @@ public class ServerE2ETests : ServerTestBase
     public async Task BindWithServerRangeId_DisconnectsClient()
     {
         await using var server = new WaylandServer();
-        var (clientFd, serverFd) = CreateSocketPair();
-
-        var waylandClient = server.AddClient(serverFd);
+        var (waylandClient, clientFd) = server.CreateConnectedClient();
         waylandClient.AddGlobal("wl_compositor", 5);
 
         var serverTask = Task.Run(() =>
@@ -317,9 +307,7 @@ public class ServerE2ETests : ServerTestBase
     public async Task SyncWithServerRangeCallbackId_DisconnectsClient()
     {
         await using var server = new WaylandServer();
-        var (clientFd, serverFd) = CreateSocketPair();
-
-        var waylandClient = server.AddClient(serverFd);
+        var (waylandClient, clientFd) = server.CreateConnectedClient();
 
         var serverTask = Task.Run(() =>
         {
@@ -376,8 +364,7 @@ public class ServerE2ETests : ServerTestBase
         {
             MaxClientObjects = 5
         });
-        var (clientFd, serverFd) = CreateSocketPair();
-        var waylandClient = server.AddClient(serverFd);
+        var (waylandClient, clientFd) = server.CreateConnectedClient();
 
         var serverTask = Task.Run(() =>
         {

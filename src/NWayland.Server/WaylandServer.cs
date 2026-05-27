@@ -145,6 +145,40 @@ public sealed partial class WaylandServer : IAsyncDisposable
     }
 
     /// <summary>
+    /// Creates a Unix socket pair. Returns (clientFd, serverFd).
+    /// </summary>
+    public static unsafe (int ClientFd, int ServerFd) CreateSocketPair()
+    {
+        int* sv = stackalloc int[2];
+        if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv) < 0)
+            throw new InvalidOperationException(
+                $"socketpair failed: {System.Runtime.InteropServices.Marshal.GetLastPInvokeError()}");
+        return (sv[0], sv[1]);
+    }
+
+    /// <summary>
+    /// Creates a socket pair, adds the server end as a new client, and returns both the
+    /// <see cref="WaylandClient"/> and the client-side file descriptor suitable for
+    /// <see cref="WlDisplay.ConnectToFd"/>.
+    /// Thread-safe — the client is enqueued for the dispatch thread.
+    /// </summary>
+    public (WaylandClient Client, int ClientFd) CreateConnectedClient()
+    {
+        var (clientFd, serverFd) = CreateSocketPair();
+        try
+        {
+            var waylandClient = AddClient(serverFd);
+            return (waylandClient, clientFd);
+        }
+        catch
+        {
+            close(clientFd);
+            close(serverFd);
+            throw;
+        }
+    }
+
+    /// <summary>
     /// Add a client from a raw socket file descriptor.
     /// Thread-safe — enqueues the client for the dispatch thread.
     /// </summary>

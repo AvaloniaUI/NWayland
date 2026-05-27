@@ -16,9 +16,7 @@ public class TeardownTests : ServerTestBase
     [Fact(Timeout = 10000)]
     public async Task DisposeEmptyDisplay()
     {
-        var (clientFd, serverFd) = CreateSocketPair();
-        close(serverFd);
-        var display = WlDisplay.ConnectToFd(clientFd);
+        var display = WlDisplay.ConnectToFd(CreateClosedSocketClientFd());
         display.Dispose();
         // Double dispose is safe
         display.Dispose();
@@ -32,8 +30,7 @@ public class TeardownTests : ServerTestBase
     public async Task DisposeDisplayDisposesProxies()
     {
         await using var server = new WaylandServer();
-        var (clientFd, serverFd) = CreateSocketPair();
-        var waylandClient = server.AddClient(serverFd);
+        var (waylandClient, clientFd) = server.CreateConnectedClient();
 
         var serverTask = Task.Run(() =>
         {
@@ -72,9 +69,7 @@ public class TeardownTests : ServerTestBase
     [Fact(Timeout = 10000)]
     public async Task DisposeDisplayDisposesQueues()
     {
-        var (clientFd, serverFd) = CreateSocketPair();
-        close(serverFd);
-        var display = WlDisplay.ConnectToFd(clientFd);
+        var display = WlDisplay.ConnectToFd(CreateClosedSocketClientFd());
         var queue = display.CreateEventQueue();
 
         display.Dispose();
@@ -90,9 +85,7 @@ public class TeardownTests : ServerTestBase
     [Fact(Timeout = 10000)]
     public async Task DisposeDisplayPreventsDispatch()
     {
-        var (clientFd, serverFd) = CreateSocketPair();
-        close(serverFd);
-        var display = WlDisplay.ConnectToFd(clientFd);
+        var display = WlDisplay.ConnectToFd(CreateClosedSocketClientFd());
         display.Dispose();
 
         Assert.Throws<ObjectDisposedException>(() => display.Dispatch());
@@ -110,9 +103,7 @@ public class TeardownTests : ServerTestBase
     [Fact(Timeout = 10000)]
     public async Task DisposeDisplayPreventsQueueCreation()
     {
-        var (clientFd, serverFd) = CreateSocketPair();
-        close(serverFd);
-        var display = WlDisplay.ConnectToFd(clientFd);
+        var display = WlDisplay.ConnectToFd(CreateClosedSocketClientFd());
         display.Dispose();
 
         Assert.Throws<ObjectDisposedException>(() => display.CreateEventQueue());
@@ -125,9 +116,7 @@ public class TeardownTests : ServerTestBase
     [Fact(Timeout = 10000)]
     public async Task DisposeEmptyQueue()
     {
-        var (clientFd, serverFd) = CreateSocketPair();
-        close(serverFd);
-        using var display = WlDisplay.ConnectToFd(clientFd);
+        using var display = WlDisplay.ConnectToFd(CreateClosedSocketClientFd());
         var queue = display.CreateEventQueue();
         queue.Dispose();
         // Double dispose is safe
@@ -142,8 +131,7 @@ public class TeardownTests : ServerTestBase
     public async Task DestructorOnDisposedProxyIsNoop()
     {
         await using var server = new WaylandServer();
-        var (clientFd, serverFd) = CreateSocketPair();
-        var waylandClient = server.AddClient(serverFd);
+        var (waylandClient, clientFd) = server.CreateConnectedClient();
 
         var serverTask = Task.Run(() =>
         {
@@ -184,8 +172,7 @@ public class TeardownTests : ServerTestBase
     public async Task SetQueueThrowsAfterDispose()
     {
         await using var server = new WaylandServer();
-        var (clientFd, serverFd) = CreateSocketPair();
-        var waylandClient = server.AddClient(serverFd);
+        var (waylandClient, clientFd) = server.CreateConnectedClient();
 
         var serverTask = Task.Run(() =>
         {
@@ -228,9 +215,8 @@ public class TeardownTests : ServerTestBase
     public async Task DisposeAbortsBlockingRoundtrips()
     {
         await using var server = new WaylandServer();
-        var (clientFd, serverFd) = CreateSocketPair();
         // Server deliberately does NOT respond — roundtrips will block
-        server.AddClient(serverFd);
+        var (_, clientFd) = server.CreateConnectedClient();
 
         var display = WlDisplay.ConnectToFd(clientFd);
         var queue = display.CreateEventQueue();
@@ -271,8 +257,7 @@ public class TeardownTests : ServerTestBase
     public async Task CrossDisplaySetQueueThrows()
     {
         await using var server = new WaylandServer();
-        var (clientFd1, serverFd1) = CreateSocketPair();
-        var waylandClient = server.AddClient(serverFd1);
+        var (waylandClient, clientFd1) = server.CreateConnectedClient();
 
         var serverTask = Task.Run(() =>
         {
@@ -291,11 +276,8 @@ public class TeardownTests : ServerTestBase
             }
         });
 
-        var (clientFd2, serverFd2) = CreateSocketPair();
-        close(serverFd2);
-
         using var display1 = WlDisplay.ConnectToFd(clientFd1);
-        using var display2 = WlDisplay.ConnectToFd(clientFd2);
+        using var display2 = WlDisplay.ConnectToFd(CreateClosedSocketClientFd());
 
         var registry = display1.GetRegistry(new RegistryCapture());
         display1.Roundtrip();
@@ -318,8 +300,7 @@ public class TeardownTests : ServerTestBase
     public async Task QueueDisposeReparentsProxies()
     {
         await using var server = new WaylandServer();
-        var (clientFd, serverFd) = CreateSocketPair();
-        var waylandClient = server.AddClient(serverFd);
+        var (waylandClient, clientFd) = server.CreateConnectedClient();
 
         var serverTask = Task.Run(() =>
         {
@@ -366,8 +347,7 @@ public class TeardownTests : ServerTestBase
     public async Task SetQueueToDisplayMovesToDefault()
     {
         await using var server = new WaylandServer();
-        var (clientFd, serverFd) = CreateSocketPair();
-        var waylandClient = server.AddClient(serverFd);
+        var (waylandClient, clientFd) = server.CreateConnectedClient();
 
         var serverTask = Task.Run(() =>
         {
@@ -417,9 +397,7 @@ public class TeardownTests : ServerTestBase
     [Fact]
     public void ImportBorrowedWithListenerThrows()
     {
-        var (clientFd, serverFd) = CreateSocketPair();
-        close(serverFd);
-        using var display = WlDisplay.ConnectToFd(clientFd);
+        using var display = WlDisplay.ConnectToFd(CreateClosedSocketClientFd());
 
         // Use display's own handle as a dummy — we won't destroy it (ownsHandle: false)
         var dummyHandle = display.Handle;
@@ -435,9 +413,7 @@ public class TeardownTests : ServerTestBase
     [Fact]
     public void ImportAfterDisplayDisposeThrows()
     {
-        var (clientFd, serverFd) = CreateSocketPair();
-        close(serverFd);
-        var display = WlDisplay.ConnectToFd(clientFd);
+        var display = WlDisplay.ConnectToFd(CreateClosedSocketClientFd());
         var handle = display.Handle;
         display.Dispose();
 
@@ -469,8 +445,7 @@ public class TeardownTests : ServerTestBase
     public async Task BindWithQueueTargetsCustomQueue()
     {
         await using var server = new WaylandServer();
-        var (clientFd, serverFd) = CreateSocketPair();
-        var waylandClient = server.AddClient(serverFd);
+        var (waylandClient, clientFd) = server.CreateConnectedClient();
         waylandClient.AddGlobal("test_parent", 1);
 
         TestParent.Server? serverParent = null;
