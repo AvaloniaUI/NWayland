@@ -14,6 +14,7 @@ OUTPUT_DIR="$(mktemp -d)"
 PROJECTS=(
     src/NWayland.Generator/NWayland.Generator.csproj
     src/NWayland/NWayland.csproj
+    src/NWayland.Server/NWayland.Server.csproj
     src/NWayland.Protocols.Wlr/NWayland.Protocols.Wlr.csproj
     src/NWayland.Protocols.Plasma/NWayland.Protocols.Plasma.csproj
 )
