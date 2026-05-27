@@ -1,0 +1,40 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="SubcompositorHost.ToplevelHostWindow"
+        Title="Wayland Toplevel"
+        SizeToContent="WidthAndHeight"
+        CanResize="True"
+        WindowStartupLocation="CenterScreen">
+    <DockPanel>
+        <!-- Header with title and close button -->
+        <Border DockPanel.Dock="Top" Background="#2d2d30" Padding="8,4">
+            <DockPanel>
+                <Button DockPanel.Dock="Right"
+                        Content="✕"
+                        Click="OnCloseButtonClick"
+                        Background="Transparent"
+                        Foreground="#cccccc"
+                        FontSize="14"
+                        Padding="8,2"
+                        VerticalAlignment="Center" />
+                <TextBlock x:Name="TitleText"
+                           Text="Untitled"
+                           Foreground="#cccccc"
+                           FontSize="13"
+                           VerticalAlignment="Center"
+                           Margin="4,0" />
+            </DockPanel>
+        </Border>
+
+        <!-- Status bar -->
+        <Border DockPanel.Dock="Bottom" Background="#007acc" Padding="8,2">
+            <TextBlock x:Name="StatusText"
+                       Text="Wayland Surface"
+                       Foreground="White"
+                       FontSize="11" />
+        </Border>
+
+        <!-- Surface content area -->
+        <Border x:Name="ContentArea" Background="#1e1e1e" />
+    </DockPanel>
+</Window>
