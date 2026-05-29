@@ -70,9 +70,14 @@ namespace NWayland.Generator
                     }
 
                     var parameterType = ParseTypeName(parameterTypeName);
-                    
-                    if (arg.Type is WaylandArgumentTypes.Object
-                        || (arg.AllowNull && arg.Type is WaylandArgumentTypes.String))
+
+                    // Requests: a parameter is nullable only when the protocol marks the arg
+                    // allow-null. Sending null on a non-nullable object/string is a protocol
+                    // violation, so we surface that at compile time.
+                    // (Events differ — see WithEvents: a non-nullable object event arg can still
+                    // arrive null due to the client-destroys-proxy / server-already-sent-event
+                    // race documented in the wl_message spec, so those stay nullable.)
+                    if (arg.AllowNull && arg.Type is WaylandArgumentTypes.Object or WaylandArgumentTypes.String)
                         parameterType = NullableType(parameterType);
 
                     parameters.Add(Parameter(Identifier(argName)).WithType(parameterType));
