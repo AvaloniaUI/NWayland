@@ -21,14 +21,19 @@ static class WaylandTracer
                     traced[c] = new WlTracedArgument { Int32 = args.GetInt32(c) };
                     break;
                 case WaylandArgumentCodes.UInt32:
-                case WaylandArgumentCodes.NewId:
                     traced[c] = new WlTracedArgument { UInt32 = args.GetUInt32(c) };
+                    break;
+                case WaylandArgumentCodes.NewId:
+                    // Server-created new_id args (in events) hold a wl_proxy*; resolve to id.
+                    // On the request path the id isn't assigned until after marshal, so this
+                    // reports 0 there, which is the honest pre-marshal value.
+                    traced[c] = new WlTracedArgument { UInt32 = args.GetObjectId(c) };
                     break;
                 case WaylandArgumentCodes.String:
                     traced[c] = new WlTracedArgument { Object = args.GetString(c) };
                     break;
                 case WaylandArgumentCodes.Object:
-                    traced[c] = new WlTracedArgument { UInt32 = args.GetUInt32(c) };
+                    traced[c] = new WlTracedArgument { UInt32 = args.GetObjectId(c) };
                     break;
                 case WaylandArgumentCodes.Array:
                     traced[c] = new WlTracedArgument { Object = null };
@@ -60,18 +65,31 @@ static class WaylandTracer
         }
     }
 
-    public static unsafe void TraceCall(WlProxy wlProxy, WaylandCallBuilder call, WlArgument* args)
+    public static unsafe void TraceCall(WlProxy wlProxy, WaylandCallBuilder call, WlArgument* args,
+        IntPtr newProxyHandle)
     {
         var tracer = wlProxy.Display.Tracer;
         if(tracer == null)
             return;
-        
+
         try
         {
             var msg =  wlProxy.Interface.Methods[(int)call.OpCode];
             // Non-owning view — intentionally not disposed. The args are owned by InvokeCore's stackalloc.
             var eargs = new WlEventArgs(new WlEventArgsImpl(args, wlProxy, call.OpCode, msg));
-            tracer.Trace(wlProxy, false, msg.IsDestructor, msg, ConvertArgs(msg, eargs));
+            var traced = ConvertArgs(msg, eargs);
+
+            // The new_id argument carries no usable id in the request args (it's a placeholder
+            // until marshalling assigns one). Fill it from the proxy libwayland just created.
+            if (newProxyHandle != IntPtr.Zero)
+                for (var c = 0; c < msg.Arguments.Count; c++)
+                    if (msg.Arguments[c].Code == WaylandArgumentCodes.NewId)
+                    {
+                        traced[c] = new WlTracedArgument { UInt32 = LibWayland.GetProxyId(newProxyHandle) };
+                        break;
+                    }
+
+            tracer.Trace(wlProxy, false, msg.IsDestructor, msg, traced);
         }
         catch
         {

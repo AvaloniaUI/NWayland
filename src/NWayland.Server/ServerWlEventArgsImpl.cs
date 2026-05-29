@@ -336,6 +336,8 @@ internal sealed class ServerWlEventArgsImpl : IWlEventArgsImpl
     public T? GetProxy<T>(int num) where T : WlProxy
         => throw new InvalidOperationException("GetProxy<T> is not available on server side");
 
+    public uint GetObjectId(int num) => unchecked((uint)_args[num].Int);
+
     public T GetNewIdProxy<T>(int num, IWlEventsListener? listener) where T : WlProxy
         => throw new InvalidOperationException("GetNewIdProxy is not available on server side");
 

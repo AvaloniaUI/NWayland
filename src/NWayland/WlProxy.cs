@@ -357,11 +357,13 @@ namespace NWayland
                 IntPtr rv;
                 fixed (WlArgument* pargs = args)
                 {
-                    WaylandTracer.TraceCall(this, call, pargs);
                     rv = LibWayland.wl_proxy_marshal_array_flags(callTargetProxy, call.OpCode,
                         proxyType != null ? proxyType.Interface.GetNative() : null, newProxyVersion, flags,
                         pargs);
 
+                    // Trace after marshalling: the new_id's object id is assigned by libwayland
+                    // during the marshal and is only available via the returned proxy (rv).
+                    WaylandTracer.TraceCall(this, call, pargs, rv);
                 }
                     
 

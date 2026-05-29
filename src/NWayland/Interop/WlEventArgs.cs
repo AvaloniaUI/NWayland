@@ -27,6 +27,11 @@ public ref struct WlEventArgs
 
     public T? GetProxy<T>(int num) where T : WlProxy => _impl.GetProxy<T>(num);
 
+    // Wire object id for an object/new_id arg (0 for null). Used by tracing so object
+    // args print as ids (matching WAYLAND_DEBUG and the server tracer) rather than as
+    // the low bits of a native proxy pointer.
+    internal uint GetObjectId(int num) => _impl.GetObjectId(num);
+
     public NewId<T, TListener> GetNewId<T, TListener>(int num)
         where T : WlProxy where TListener : class, IWlEventsListener
         => new NewId<T, TListener>(new NewIdImpl<T>(_impl, num));
@@ -72,6 +77,11 @@ internal interface IWlEventArgsImpl : IDisposable
     WlFixed GetWlFixed(int num);
     string? GetString(int num);
     byte[]? GetArrayBytes(int num);
+
+    /// <summary>
+    /// Wire object id for an object/new_id argument, or 0 if null. Used for tracing.
+    /// </summary>
+    uint GetObjectId(int num);
 
     /// <summary>
     /// Consume the FD at the given argument index. Marks it consumed so it won't be auto-closed.
@@ -167,6 +177,14 @@ unsafe class WlEventArgsImpl : IWlEventArgsImpl
             return (T?)_proxy.Display.FindByNative(proxyPtr);
         }
         throw new InvalidOperationException();
+    }
+
+    public uint GetObjectId(int num)
+    {
+        // Both object and new_id args carry a native wl_proxy* (or null) in this slot,
+        // for events (demarshalled by libwayland) and requests (the proxy Handle we wrote).
+        var ptr = Raw(num).IntPtr;
+        return ptr == IntPtr.Zero ? 0 : LibWayland.GetProxyId(ptr);
     }
 
     public T GetNewIdProxy<T>(int num, IWlEventsListener? listener) where T : WlProxy
