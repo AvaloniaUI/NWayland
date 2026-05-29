@@ -43,6 +43,12 @@ namespace NWayland.Interop
         [DllImport(Wayland, ExactSpelling = true)]
         internal static extern void wl_display_disconnect(IntPtr display);
 
+        [DllImport(Wayland, SetLastError = true, ExactSpelling = true)]
+        internal static extern int wl_display_get_error(IntPtr display);
+
+        [DllImport(Wayland, ExactSpelling = true)]
+        internal static extern uint wl_display_get_protocol_error(IntPtr display, out IntPtr @interface, out uint id);
+
         [DllImport(Wayland, ExactSpelling = true)]
         internal static extern void wl_proxy_marshal_array(IntPtr proxy, uint opcode, WlArgument* args);
 

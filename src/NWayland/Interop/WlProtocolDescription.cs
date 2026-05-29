@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
@@ -8,14 +9,46 @@ using NWayland.Protocols.Wayland;
 
 namespace NWayland.Interop;
 
+/// <summary>
+/// A protocol error code defined by an interface's <c>error</c> enum, used to give
+/// protocol errors a human-readable name and summary (libwayland exposes only the
+/// numeric code, interface and object id — the compositor's free-form message is
+/// not retrievable).
+/// </summary>
+public readonly record struct WlProtocolErrorDescription(uint Code, string Name, string? Summary);
+
 public unsafe class WlInterfaceDescription
 {
     public string Name { get; private set; }
     public int Version { get; private set; }
     public IReadOnlyList<WlMessageDescription> Methods { get; private set; }
     public IReadOnlyList<WlMessageDescription> Events { get; private set; }
+    private IReadOnlyDictionary<uint, WlProtocolErrorDescription> _errors =
+        new Dictionary<uint, WlProtocolErrorDescription>();
 
     public static Builder Create(string name, int version) => new Builder(name, version);
+
+    /// <summary>
+    /// Looks up the <c>error</c>-enum entry for a protocol error code raised by an object
+    /// of this interface. Returns false if this interface defines no such code.
+    /// </summary>
+    public bool TryGetError(uint code, out WlProtocolErrorDescription error)
+        => _errors.TryGetValue(code, out error);
+
+    // Maps each allocated native wl_interface* back to its managed description so the
+    // interface pointer returned by wl_display_get_protocol_error can be resolved.
+    private static readonly ConcurrentDictionary<IntPtr, WlInterfaceDescription> _nativeRegistry = new();
+
+    internal static WlInterfaceDescription? ResolveNative(IntPtr native)
+        => native != IntPtr.Zero && _nativeRegistry.TryGetValue(native, out var desc) ? desc : null;
+
+    // Maps interface name -> description. Needed because some proxies (notably wl_display)
+    // are created by libwayland with its own wl_interface, so the pointer returned by
+    // wl_display_get_protocol_error won't be in _nativeRegistry, but the name still resolves.
+    private static readonly ConcurrentDictionary<string, WlInterfaceDescription> _nameRegistry = new();
+
+    internal static WlInterfaceDescription? ResolveByName(string name)
+        => _nameRegistry.TryGetValue(name, out var desc) ? desc : null;
 
     private volatile WlInterface* _nativeCache;
     private object _nativeCacheBuilderLock = new();
@@ -32,14 +65,16 @@ public unsafe class WlInterfaceDescription
             var native = (WlInterface*)Marshal.AllocHGlobal(Unsafe.SizeOf<WlInterface>());
             *native = new WlInterface(Name, Version, Methods.Select(x => x.GetNative()).ToArray(),
                 Events.Select(x => x.GetNative()).ToArray());
+            _nativeRegistry[(IntPtr)native] = this;
             return _nativeCache = native;
         }
     }
-    
+
     public class Builder(string Name, int Version)
     {
         private List<WlMessageDescription> _methods = new();
         private List<WlMessageDescription> _events = new();
+        private Dictionary<uint, WlProtocolErrorDescription> _errors = new();
 
         public Builder AddMethod(WlMessageDescription method)
         {
@@ -52,16 +87,28 @@ public unsafe class WlInterfaceDescription
             _events.Add(ev);
             return this;
         }
-        
+
+        public Builder AddError(uint code, string name, string? summary)
+        {
+            _errors[code] = new WlProtocolErrorDescription(code, name, summary);
+            return this;
+        }
+
         public WlInterfaceDescription Build()
         {
-            return new WlInterfaceDescription
+            var desc = new WlInterfaceDescription
             {
                 Name = Name,
                 Version = Version,
                 Methods = _methods.ToList(),
-                Events = _events.ToList()
+                Events = _events.ToList(),
+                _errors = _errors
             };
+            // Index by name so protocol errors can be resolved even for libwayland-created
+            // proxies (e.g. wl_display). Last writer wins if a name is defined twice.
+            if (_errors.Count > 0)
+                _nameRegistry[Name] = desc;
+            return desc;
         }
     }
 }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using NWayland.Interop;
 
 namespace NWayland.Protocols.Wayland
@@ -287,6 +288,77 @@ namespace NWayland.Protocols.Wayland
                     return;
                 LibWayland.wl_display_cancel_read(Handle);
             }
+        }
+
+        /// <summary>
+        /// Retrieve the last error that occurred on the display (a libc errno value), or 0 if none.
+        /// A non-zero value is fatal: the display can no longer be used. <c>EPROTO</c> indicates a
+        /// protocol error whose details are available via <see cref="GetProtocolError"/>.
+        /// </summary>
+        public int GetError()
+        {
+            if (_isDisposed)
+                throw new ObjectDisposedException(nameof(WlDisplay));
+            lock (SyncRoot)
+            {
+                if (_isDisposed)
+                    throw new ObjectDisposedException(nameof(WlDisplay));
+                return LibWayland.wl_display_get_error(Handle);
+            }
+        }
+
+        /// <summary>
+        /// If the display is in a fatal protocol-error state, returns the error described by the
+        /// offending interface and its <c>error</c> enum; otherwise returns null. libwayland does
+        /// not retain the compositor's free-form message, so the message is synthesized from the
+        /// protocol definition. The dispatch/roundtrip methods do not throw: they return <c>-1</c> on
+        /// failure, after which the caller can inspect the error via this method.
+        /// </summary>
+        public WaylandProtocolError? GetProtocolError()
+        {
+            if (_isDisposed)
+                return null;
+            lock (SyncRoot)
+            {
+                if (_isDisposed)
+                    return null;
+                return BuildProtocolError();
+            }
+        }
+
+        // Must be called under SyncRoot with the display not disposed.
+        private unsafe WaylandProtocolError? BuildProtocolError()
+        {
+            if (LibWayland.wl_display_get_error(Handle) != Syscall.EPROTO)
+                return null;
+
+            var code = LibWayland.wl_display_get_protocol_error(Handle, out var ifacePtr, out var id);
+
+            string? interfaceName = null, errorName = null, errorSummary = null;
+            if (ifacePtr != IntPtr.Zero)
+            {
+                // Prefer the exact pointer; fall back to name lookup for libwayland-created
+                // interfaces (e.g. wl_display) whose pointer isn't one we allocated.
+                var desc = WlInterfaceDescription.ResolveNative(ifacePtr);
+                if (desc == null)
+                {
+                    interfaceName = Marshal.PtrToStringAnsi(((WlInterface*)ifacePtr)->Name);
+                    if (interfaceName != null)
+                        desc = WlInterfaceDescription.ResolveByName(interfaceName);
+                }
+
+                if (desc != null)
+                {
+                    interfaceName = desc.Name;
+                    if (desc.TryGetError(code, out var err))
+                    {
+                        errorName = err.Name;
+                        errorSummary = err.Summary;
+                    }
+                }
+            }
+
+            return new WaylandProtocolError(code, interfaceName, id, errorName, errorSummary);
         }
 
         // Called by WlEventQueue ctor (under SyncRoot — Monitor is reentrant)

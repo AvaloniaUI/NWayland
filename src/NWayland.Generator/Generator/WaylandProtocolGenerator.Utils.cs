@@ -70,6 +70,9 @@ namespace NWayland.Generator
         private static LiteralExpressionSyntax MakeLiteralExpression(int literal)
             => LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(literal));
 
+        private static LiteralExpressionSyntax MakeLiteralExpression(uint literal)
+            => LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(literal));
+
         private static LiteralExpressionSyntax MakeLiteralExpression(bool literal)
             => LiteralExpression(literal ? SyntaxKind.TrueLiteralExpression : SyntaxKind.FalseLiteralExpression);
 

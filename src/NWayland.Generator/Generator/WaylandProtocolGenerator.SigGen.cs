@@ -97,6 +97,44 @@ namespace NWayland.Generator
             return builder;
         }
         
+        // Emits AddError(code, name, summary) for each entry of the interface's "error" enum
+        // (the spec-mandated home for protocol error codes), so the runtime can give protocol
+        // errors a human-readable name/summary — libwayland only exposes the numeric code.
+        private ExpressionSyntax GenerateErrorList(ExpressionSyntax builder, WaylandProtocolInterface iface)
+        {
+            var errorEnum = iface.Enums?.FirstOrDefault(e => e.Name == "error");
+            if (errorEnum?.Entries == null)
+                return builder;
+
+            foreach (var entry in errorEnum.Entries)
+            {
+                if (!TryParseEnumValue(entry.Value, out var code))
+                    continue;
+                var summary = string.IsNullOrEmpty(entry.Summary)
+                    ? (ExpressionSyntax)MakeNullLiteralExpression()
+                    : MakeLiteralExpression(entry.Summary);
+                builder = InvokeMemberCrLf(builder, "AddError",
+                    MakeLiteralExpression(code),
+                    MakeLiteralExpression(entry.Name),
+                    summary);
+            }
+
+            return builder;
+        }
+
+        private static bool TryParseEnumValue(string? value, out uint result)
+        {
+            result = 0;
+            if (string.IsNullOrWhiteSpace(value))
+                return false;
+            value = value!.Trim();
+            if (value.StartsWith("0x") || value.StartsWith("0X"))
+                return uint.TryParse(value.Substring(2),
+                    System.Globalization.NumberStyles.HexNumber,
+                    System.Globalization.CultureInfo.InvariantCulture, out result);
+            return uint.TryParse(value, out result);
+        }
+
         private ClassDeclarationSyntax WithSignature(ClassDeclarationSyntax cl, WaylandProtocolInterface iface)
         {
             var builder = (ExpressionSyntax)InvokeMemberCrLf(
@@ -106,6 +144,7 @@ namespace NWayland.Generator
 
             builder = GenerateWlMessageList(builder, false, iface.Requests);
             builder = GenerateWlMessageList(builder, true, iface.Events);
+            builder = GenerateErrorList(builder, iface);
 
             var built = InvokeMemberCrLf(builder, "Build");
             
