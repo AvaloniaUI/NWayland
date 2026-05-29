@@ -43,7 +43,9 @@ public class ProtocolErrorTests
         await using var server = new WaylandServer();
         var (waylandClient, clientFd) = server.CreateConnectedClient();
 
-        const uint errorCode = 7;
+        // invalid_object (0) is a wl_display "global" error code; the server raises it against
+        // the wl_registry object (which has no error enum of its own), exactly like a failed bind.
+        const uint errorCode = 0;
         var serverTask = Task.Run(() =>
         {
             while (true)
@@ -80,6 +82,9 @@ public class ProtocolErrorTests
         // The error referenced the wl_registry object, resolved via its interface pointer.
         Assert.Equal("wl_registry", error.InterfaceName);
         Assert.Equal(2u, error.ObjectId);
+        // The code is a wl_display global error; wl_registry has no error enum, so the name
+        // resolves via the wl_display fallback rather than the object's own interface.
+        Assert.Equal("invalid_object", error.ErrorName);
 
         await server.DisposeAsync();
         try { await serverTask; } catch (ObjectDisposedException) { }

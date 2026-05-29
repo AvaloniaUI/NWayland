@@ -292,8 +292,11 @@ namespace NWayland.Protocols.Wayland
 
         /// <summary>
         /// Retrieve the last error that occurred on the display (a libc errno value), or 0 if none.
-        /// A non-zero value is fatal: the display can no longer be used. <c>EPROTO</c> indicates a
-        /// protocol error whose details are available via <see cref="GetProtocolError"/>.
+        /// A non-zero value is fatal: the display can no longer be used. The errno does NOT reliably
+        /// indicate a protocol error — libwayland reports protocol errors raised on the wl_display
+        /// object as <c>EINVAL</c>/<c>ENOMEM</c>/<c>EPROTO</c> by code, and only uses <c>EPROTO</c>
+        /// for errors on other interfaces. To test for a protocol error, call
+        /// <see cref="GetProtocolError"/> (non-null when one is pending).
         /// </summary>
         public int GetError()
         {
@@ -329,10 +332,17 @@ namespace NWayland.Protocols.Wayland
         // Must be called under SyncRoot with the display not disposed.
         private unsafe WaylandProtocolError? BuildProtocolError()
         {
-            if (LibWayland.wl_display_get_error(Handle) != Syscall.EPROTO)
+            // Don't gate on a specific errno: libwayland maps protocol errors raised on the
+            // wl_display object to EINVAL (invalid_object/invalid_method), ENOMEM (no_memory)
+            // or EPROTO (implementation), and only uses EPROTO for errors on other interfaces.
+            // Detect a *populated* protocol_error instead — a transport/local fatal error
+            // (e.g. EPIPE) leaves protocol_error zeroed.
+            if (LibWayland.wl_display_get_error(Handle) == 0)
                 return null;
 
             var code = LibWayland.wl_display_get_protocol_error(Handle, out var ifacePtr, out var id);
+            if (code == 0 && ifacePtr == IntPtr.Zero)
+                return null; // fatal but not a protocol error
 
             string? interfaceName = null, errorName = null, errorSummary = null;
             if (ifacePtr != IntPtr.Zero)
@@ -355,6 +365,25 @@ namespace NWayland.Protocols.Wayland
                         errorName = err.Name;
                         errorSummary = err.Summary;
                     }
+                }
+            }
+
+            // wl_display defines "global" error codes (invalid_object / invalid_method /
+            // no_memory / implementation) that the server may raise against ANY object — not
+            // just the wl_display object. The canonical case is a failed wl_registry.bind, which
+            // arrives as error(object=wl_registry, code=invalid_object): the code belongs to
+            // wl_display's enum even though the object is a wl_registry. When the object's own
+            // interface doesn't define the code, fall back to wl_display's global error names.
+            // (This can't disambiguate a true collision where the object interface also defines
+            // the code — that is unsolvable on the wire; only the server's free-form message,
+            // which libwayland does not retain, would tell them apart.)
+            if (errorName == null)
+            {
+                var displayDesc = WlInterfaceDescription.ResolveByName("wl_display");
+                if (displayDesc != null && displayDesc.TryGetError(code, out var globalErr))
+                {
+                    errorName = globalErr.Name;
+                    errorSummary = globalErr.Summary;
                 }
             }
 
