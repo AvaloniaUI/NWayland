@@ -137,12 +137,17 @@ namespace NWayland
         /// Disposes this proxy by unregistering it and destroying the native handle.
         /// </summary>
         /// <remarks>
-        /// TODO: For protocol objects with destructor requests (e.g. wl_surface.destroy),
-        /// this only frees the client-side proxy via wl_proxy_destroy — it does NOT send
-        /// the destructor request to the compositor. The server-side resource leaks until
-        /// disconnect. Consider generating Dispose overrides that call the protocol destructor
-        /// while the display is alive. This is non-trivial because some interfaces have
-        /// multiple destructors or destructors with arguments.
+        /// This frees the client-side proxy via wl_proxy_destroy only; it deliberately does
+        /// NOT send any protocol destructor request to the compositor. Sending the destructor
+        /// is the application's responsibility via the generated destructor method
+        /// (e.g. <c>wl_surface.Destroy()</c>), after which calling Dispose is a safe no-op.
+        ///
+        /// Dispose cannot pick the destructor automatically: which destructor to send — or
+        /// whether to send one at all — can depend on runtime protocol state. For example,
+        /// ext_session_lock_v1 exposes both <c>destroy</c> and <c>unlock_and_destroy</c>, and
+        /// the correct choice depends on whether the <c>locked</c> event was received; picking
+        /// the wrong one is a protocol error or leaves the session locked. Some destructors also
+        /// take arguments. So the destructor choice must stay with the caller.
         /// </remarks>
         public virtual void Dispose()
         {
