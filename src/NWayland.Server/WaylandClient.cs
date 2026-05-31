@@ -89,7 +89,12 @@ public sealed class WaylandClient : IDisposable
     /// shuts down the read side, disposes the parser (closing pending FDs),
     /// and enqueues a disconnect event for <see cref="WaylandServer.NextEvent"/>.
     /// </summary>
-    public void PostError(WlResource? resource, uint code, string message)
+    /// <remarks>
+    /// This is the low-level transport. Prefer <c>WlResource.PostError</c> (the protected base
+    /// overload, or the generated strongly-typed public overload on a resource class), which
+    /// auto-resolves the error message from the interface's <c>error</c> enum.
+    /// </remarks>
+    internal void PostError(WlResource? resource, uint code, string message)
     {
         using (_server.AcquireDispatchLock())
         {
@@ -97,7 +102,10 @@ public sealed class WaylandClient : IDisposable
             // the 4096-byte max message size (header + objectId + code + string overhead).
             if (message.Length > 0xf80)
                 message = message.Substring(0, 0xf80);
-            _displayResource.Error(resource, code, message);
+            // A null resource references the wl_display object itself (id 1). wl_display.error's
+            // object_id arg is non-nullable, so we must pass a real object, and the display is the
+            // canonical target for global errors (matches libwayland's wl_resource_post_no_memory).
+            _displayResource.Error(resource ?? _displayResource, code, message);
             try { _outgoingBuffer.TryFlushToSocket(_socket); } catch { /* best-effort */ }
             _socket.ShutdownRead();
             if (Parser != null)

@@ -114,6 +114,12 @@ internal sealed class WaylandResourceImpl : IWlResourceImpl
         }
     }
 
+    public void PostError(WlResource resource, uint code, string message)
+        => _client.PostError(resource, code, message);
+
+    public void PostGlobalError(uint code, string message)
+        => _client.PostError(null, code, message); // null => references the wl_display object
+
     public void Destroy(WlResource resource)
     {
         if (_disposed)

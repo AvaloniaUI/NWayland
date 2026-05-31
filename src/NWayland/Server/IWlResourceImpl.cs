@@ -36,4 +36,15 @@ internal interface IWlResourceImpl
     /// Notify the backend that a resource is being destroyed (removed from object map, etc.).
     /// </summary>
     void Destroy(WlResource resource);
+
+    /// <summary>
+    /// Send a <c>wl_display.error</c> referencing this resource and disconnect the client.
+    /// </summary>
+    void PostError(WlResource resource, uint code, string message);
+
+    /// <summary>
+    /// Send a <c>wl_display.error</c> referencing the <c>wl_display</c> object (id 1) — for the
+    /// wl_display "global" error codes — and disconnect the client.
+    /// </summary>
+    void PostGlobalError(uint code, string message);
 }

@@ -20,9 +20,12 @@ public class SerializationTests : ServerTestBase
     /// Helper that sets up a connected client+server pair with a bound TestParent resource.
     /// Returns all the pieces needed for testing.
     /// </summary>
-    private async Task<TestFixture> SetupBoundTestParent(TestParent.ServerListener? serverListener = null)
+    private async Task<TestFixture> SetupBoundTestParent(TestParent.ServerListener? serverListener = null,
+        IWaylandServerTracer? tracer = null)
     {
-        var server = new WaylandServer();
+        var server = tracer == null
+            ? new WaylandServer()
+            : new WaylandServer(new WaylandServerOptions { Tracer = tracer });
         var (waylandClient, clientFd) = server.CreateConnectedClient();
         waylandClient.AddGlobal("test_parent", 1);
 
@@ -642,6 +645,93 @@ public class SerializationTests : ServerTestBase
         protected override void Destroy(TestParent.Server resource)
         {
         }
+    }
+
+    /// <summary>
+    /// Server raises a strongly-typed protocol error on a resource. The client sees the code,
+    /// interface and resolved error name; the server auto-resolves the message from the
+    /// interface's error-enum summary (verified via the server tracer, since libwayland drops
+    /// the message string on the client side).
+    /// </summary>
+    [Fact(Timeout = 10000)]
+    public async Task ServerPostError_TypedCode_ResolvesMessageFromEnum()
+    {
+        var tracer = new RecordingTracer();
+        await using var f = await SetupBoundTestParent(tracer: tracer);
+
+        f.Server.Post(() => f.ServerParent.PostError(TestParent.ErrorEnum.BadValue));
+
+        // The protocol error tears down the connection; dispatch until it surfaces.
+        for (var i = 0; i < 100; i++)
+            if (f.Display.Dispatch() < 0)
+                break;
+
+        var pe = f.Display.GetProtocolError();
+        Assert.NotNull(pe);
+        Assert.Equal((uint)TestParent.ErrorEnum.BadValue, pe!.Code);
+        Assert.Equal("test_parent", pe.InterfaceName);
+        Assert.Equal("bad_value", pe.ErrorName);
+        Assert.Equal(f.ClientParent.Id, pe.ObjectId);
+
+        // Server side: message auto-resolved from the enum entry summary (args: object, code, message).
+        var error = tracer.Events.Find(e => e.EventName == "error");
+        Assert.Equal("error", error.EventName);
+        Assert.Equal("a bad value was provided", error.Args[2].Object);
+    }
+
+    /// <summary>
+    /// An explicit message overrides the auto-resolved one.
+    /// </summary>
+    [Fact(Timeout = 10000)]
+    public async Task ServerPostError_ExplicitMessage_Overrides()
+    {
+        var tracer = new RecordingTracer();
+        await using var f = await SetupBoundTestParent(tracer: tracer);
+
+        f.Server.Post(() => f.ServerParent.PostError(TestParent.ErrorEnum.NotAllowed, "explicit override"));
+
+        for (var i = 0; i < 100; i++)
+            if (f.Display.Dispatch() < 0)
+                break;
+
+        var pe = f.Display.GetProtocolError();
+        Assert.NotNull(pe);
+        Assert.Equal((uint)TestParent.ErrorEnum.NotAllowed, pe!.Code);
+        Assert.Equal("not_allowed", pe.ErrorName);
+
+        var error = tracer.Events.Find(e => e.EventName == "error");
+        Assert.Equal("explicit override", error.Args[2].Object);
+    }
+
+    /// <summary>
+    /// A wl_display "global" error (no_memory) raised from an arbitrary resource references the
+    /// wl_display object (id 1) so the client resolves the correct interface, errno and name —
+    /// rather than misreading the code against the originating resource's own interface.
+    /// </summary>
+    [Fact(Timeout = 10000)]
+    public async Task ServerPostError_GlobalDisplayError_ReferencesDisplay()
+    {
+        var tracer = new RecordingTracer();
+        await using var f = await SetupBoundTestParent(tracer: tracer);
+
+        f.Server.Post(() => f.ServerParent.PostError(WlDisplay.ErrorEnum.NoMemory));
+
+        for (var i = 0; i < 100; i++)
+            if (f.Display.Dispatch() < 0)
+                break;
+
+        var pe = f.Display.GetProtocolError();
+        Assert.NotNull(pe);
+        Assert.Equal((uint)WlDisplay.ErrorEnum.NoMemory, pe!.Code);
+        Assert.Equal("wl_display", pe.InterfaceName); // referenced the display, not test_parent
+        Assert.Equal(1u, pe.ObjectId);                // wl_display is always object id 1
+        Assert.Equal("no_memory", pe.ErrorName);
+
+        // Message auto-resolved from wl_display's error enum summary, with the offending object's
+        // identity appended (weston-style) since the error itself references wl_display.
+        var error = tracer.Events.Find(e => e.EventName == "error");
+        Assert.Equal($"server is out of memory, object test_parent@{f.ServerParent.ObjectId}",
+            error.Args[2].Object);
     }
 
     private class TestFixture : IAsyncDisposable

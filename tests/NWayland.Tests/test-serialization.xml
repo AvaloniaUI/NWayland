@@ -9,6 +9,11 @@
       Used as a target for object and new_id argument types.
     </description>
 
+    <enum name="error">
+      <entry name="bad_value" value="0" summary="a bad value was provided"/>
+      <entry name="not_allowed" value="1" summary="operation is not allowed"/>
+    </enum>
+
     <!-- Server → Client events (test client-side deserialization) -->
 
     <event name="integers">

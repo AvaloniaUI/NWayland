@@ -43,6 +43,11 @@ namespace NWayland.Generator
                         Argument(IdentifierName("context"))
                     })))));
 
+            // Strongly-typed PostError for interfaces that define an "error" enum.
+            var postError = CreateServerPostError(@interface);
+            if (postError != null)
+                serverClass = serverClass.AddMembers(postError);
+
             // Generate methods for events (server sends events to client)
             var events = @interface.Events ?? Array.Empty<WaylandProtocolMessage>();
             for (var eventIndex = 0; eventIndex < events.Length; eventIndex++)
@@ -54,6 +59,42 @@ namespace NWayland.Generator
             }
 
             return serverClass;
+        }
+
+        // Emits: public void PostError(<Interface>.ErrorEnum code, string? message = null)
+        //            => PostError((uint)code, message);
+        // The strongly-typed entry point; delegates to the protected WlResource.PostError(uint,…)
+        // which auto-resolves the message from the error enum when message is null.
+        private MethodDeclarationSyntax? CreateServerPostError(WaylandProtocolInterface @interface)
+        {
+            var hasErrorEnum = @interface.Enums?.Any(e => e.Name == "error") ?? false;
+            if (!hasErrorEnum)
+                return null;
+
+            // wl_display's error enum is the "global" one already exposed by the base
+            // WlResource.PostError(WlDisplay.ErrorEnum,…) overload — don't re-emit it here, or
+            // WlDisplay.Server would declare a duplicate signature that hides the base method.
+            if (@interface.Name == "wl_display")
+                return null;
+
+            var enumType = GetWlInterfaceTypeName(@interface.Name) + ".ErrorEnum";
+
+            return MethodDeclaration(ParseTypeName("void"), "PostError")
+                .WithModifiers(TokenList(Token(SyntaxKind.PublicKeyword)))
+                .WithParameterList(ParameterList(SeparatedList(new[]
+                {
+                    Parameter(Identifier("code")).WithType(ParseTypeName(enumType)),
+                    Parameter(Identifier("message")).WithType(ParseTypeName("string?"))
+                        .WithDefault(EqualsValueClause(MakeNullLiteralExpression()))
+                })))
+                .WithExpressionBody(ArrowExpressionClause(
+                    InvocationExpression(IdentifierName("PostError"))
+                        .WithArgumentList(ArgumentList(SeparatedList(new[]
+                        {
+                            Argument(CastExpression(ParseTypeName("uint"), IdentifierName("code"))),
+                            Argument(IdentifierName("message"))
+                        })))))
+                .WithSemicolonToken(Semicolon());
         }
 
         private MethodDeclarationSyntax? CreateServerEventMethod(WaylandProtocol protocol,
