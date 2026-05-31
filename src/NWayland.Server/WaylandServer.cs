@@ -235,7 +235,22 @@ public sealed partial class WaylandServer : IAsyncDisposable
     /// or async state machines. The calling thread blocks in epoll_wait when no
     /// client data is available.
     /// </remarks>
-    public WaylandServerEvent NextEvent()
+    public WaylandServerEvent NextEvent() => Dispatch(block: true)!;
+
+    /// <summary>
+    /// Return the next available event without ever blocking, or <c>null</c> when nothing is
+    /// currently pending. Drains, in priority order: posted custom events, client disconnects,
+    /// and parsed protocol requests. Socket readiness is refreshed with a zero-timeout
+    /// <c>epoll_wait</c>, so freshly-arrived data is picked up too — the poll never blocks and
+    /// returns immediately when no fd is ready.
+    /// </summary>
+    /// <remarks>
+    /// Call this in a loop (until it returns null) to flush all currently-pending work without
+    /// blocking. Subject to the same single-caller / dispatch-thread guard as <see cref="NextEvent"/>.
+    /// </remarks>
+    public WaylandServerEvent? NextEventPending() => Dispatch(block: false);
+
+    private WaylandServerEvent? Dispatch(bool block)
     {
         lock (_stateLock)
         {
@@ -248,7 +263,7 @@ public sealed partial class WaylandServer : IAsyncDisposable
 
         try
         {
-            return NextEventCore();
+            return NextEventCore(block);
         }
         finally
         {

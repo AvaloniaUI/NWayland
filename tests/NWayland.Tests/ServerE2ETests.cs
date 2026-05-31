@@ -10,6 +10,64 @@ namespace NWayland.Tests;
 public class ServerE2ETests : ServerTestBase
 {
     /// <summary>
+    /// NextEventPending returns null immediately when idle (never blocks) and drains all
+    /// currently-pending events one at a time until exhausted.
+    /// </summary>
+    [Fact(Timeout = 10000)]
+    public async Task NextEventPending_DrainsWithoutBlocking()
+    {
+        await using var server = new WaylandServer();
+
+        // Idle: returns null immediately. If it blocked in epoll_wait, the test would time out.
+        Assert.Null(server.NextEventPending());
+
+        server.Post("a");
+        server.Post("b");
+        server.Post("c");
+
+        var drained = new System.Collections.Generic.List<object?>();
+        WaylandServerEvent? evt;
+        while ((evt = server.NextEventPending()) != null)
+            drained.Add(((WaylandCustomEvent)evt).State);
+
+        Assert.Equal(new object?[] { "a", "b", "c" }, drained);
+
+        // Fully drained again.
+        Assert.Null(server.NextEventPending());
+    }
+
+    /// <summary>
+    /// NextEventPending refreshes readiness with a zero-timeout epoll, so it picks up data that
+    /// arrives on a client socket without any prior blocking NextEvent — and still never blocks.
+    /// </summary>
+    [Fact(Timeout = 10000)]
+    public async Task NextEventPending_PicksUpFreshSocketData()
+    {
+        await using var server = new WaylandServer();
+        var (waylandClient, clientFd) = server.CreateConnectedClient();
+
+        using var display = WlDisplay.ConnectToFd(clientFd);
+        // Client roundtrip on a background thread — blocks until the server completes the sync.
+        var clientTask = Task.Run(() => display.Roundtrip());
+
+        // Drive the server purely with NextEventPending (never the blocking NextEvent). The
+        // zero-timeout poll discovers the client's freshly-arrived sync once it lands.
+        WaylandServerEvent? evt = null;
+        while (evt == null)
+        {
+            evt = server.NextEventPending();
+            if (evt == null)
+                await Task.Delay(5);
+        }
+
+        var sync = Assert.IsType<WaylandServerSyncEvent>(evt);
+        sync.Complete(0);
+        waylandClient.TryFlush();
+
+        await clientTask;
+    }
+
+    /// <summary>
     /// Client connects, sends sync (via Roundtrip), server completes it.
     /// Verifies the full request/response cycle works end to end.
     /// </summary>

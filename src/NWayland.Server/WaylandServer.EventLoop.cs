@@ -6,7 +6,7 @@ namespace NWayland.Server;
 
 public sealed partial class WaylandServer
 {
-    private WaylandServerEvent NextEventCore()
+    private WaylandServerEvent? NextEventCore(bool block)
     {
         while (true)
         {
@@ -48,9 +48,14 @@ public sealed partial class WaylandServer
                 continue;
             }
 
-            // 7. No ready client — flush all pending writes, then block on epoll
+            // 7. No ready client — flush all pending writes, then refresh readiness via epoll.
+            // Blocking: wait indefinitely. Non-blocking: zero timeout — this flags any sockets
+            // that have become readable/writable so the loop can drain them, but returns 0
+            // (=> null) immediately when nothing is ready, instead of blocking.
             FlushAllClients();
-            PollAndDispatchReadiness();
+            int readyCount = PollAndDispatchReadiness(block ? -1 : 0);
+            if (!block && readyCount == 0)
+                return null;
         }
     }
 
@@ -316,11 +321,13 @@ public sealed partial class WaylandServer
     }
 
     /// <summary>
-    /// Block on epoll_wait and update client readiness flags.
+    /// Wait on epoll for the given timeout (-1 blocks, 0 polls without blocking) and update
+    /// client readiness flags. Returns the number of ready client entries (the internal wakeup
+    /// eventfd is consumed and not counted), so a zero-timeout poll reports 0 when nothing is ready.
     /// </summary>
-    private void PollAndDispatchReadiness()
+    private int PollAndDispatchReadiness(int timeoutMs)
     {
-        int n = _poll.Wait(_epollResults, -1);
+        int n = _poll.Wait(_epollResults, timeoutMs);
 
         for (int i = 0; i < n; i++)
         {
@@ -356,5 +363,7 @@ public sealed partial class WaylandServer
                 client.Parser.Dispose();
             }
         }
+
+        return n;
     }
 }
