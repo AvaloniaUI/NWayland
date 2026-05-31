@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<protocol name="test_custom_ns">
+  <copyright>
+    Test protocol for verifying code generation under a non-NWayland root namespace.
+  </copyright>
+
+  <interface name="test_custom_ns_thing" version="1">
+    <description summary="Generated under a root namespace not nested under NWayland">
+      Regression guard: WlProxy (base type), IWlTargetQueue and WlFixed live in the root
+      NWayland namespace and are referenced unqualified, so the generated file must emit
+      `using NWayland;` for non-NWayland target namespaces to compile.
+    </description>
+
+    <request name="set_value">
+      <description summary="exercises an unqualified WlFixed parameter"/>
+      <arg name="value" type="fixed"/>
+    </request>
+
+    <event name="changed">
+      <description summary="exercises an unqualified WlFixed event arg"/>
+      <arg name="value" type="fixed"/>
+    </event>
+  </interface>
+</protocol>

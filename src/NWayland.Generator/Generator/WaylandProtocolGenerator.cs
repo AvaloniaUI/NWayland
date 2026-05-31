@@ -135,6 +135,7 @@ namespace NWayland.Generator
             code = code.AddUsings(UsingDirective(IdentifierName("System")))
                 .AddUsings(UsingDirective(IdentifierName("System.Runtime.CompilerServices")))
                 .AddUsings(UsingDirective(IdentifierName("System.Runtime.InteropServices")))
+                .AddUsings(UsingDirective(IdentifierName("NWayland")))
                 .AddUsings(UsingDirective(IdentifierName("NWayland.Protocols.Wayland")))
                 .AddUsings(UsingDirective(IdentifierName("NWayland.Interop")));
 
