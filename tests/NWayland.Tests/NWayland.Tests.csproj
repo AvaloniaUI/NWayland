@@ -27,6 +27,7 @@
 
     <ItemGroup>
         <AdditionalFiles Include="test-serialization.xml" NWaylandNamespace="NWayland.Tests.Protocols" />
+        <AdditionalFiles Include="test-internal.xml" NWaylandNamespace="NWayland.Tests.Protocols" NWaylandVisibility="internal" />
     </ItemGroup>
 
     <Import Project="../../src/NWayland.Generator/NWayland.Generator.Use.targets"/>

@@ -79,13 +79,19 @@ public class NWaylandRoslynGenerator : IIncrementalGenerator
         var sources = context.AdditionalTextsProvider.Combine(context.AnalyzerConfigOptionsProvider)
             .Select((x, t) =>
             {
-                x.Right.GetOptions(x.Left).TryGetValue("build_metadata.AdditionalFiles.NWaylandNamespace", out var ns);
-                return (text: x.Left, ns: ns);
+                var fileOptions = x.Right.GetOptions(x.Left);
+                fileOptions.TryGetValue("build_metadata.AdditionalFiles.NWaylandNamespace", out var ns);
+                // Per-file visibility wins; fall back to the NWayland_DefaultVisibility property.
+                if (!fileOptions.TryGetValue("build_metadata.AdditionalFiles.NWaylandVisibility", out var vis)
+                    || string.IsNullOrWhiteSpace(vis))
+                    x.Right.GlobalOptions.TryGetValue("build_property.NWayland_DefaultVisibility", out vis);
+                var isInternal = string.Equals(vis, "internal", StringComparison.OrdinalIgnoreCase);
+                return (text: x.Left, ns: ns, isInternal);
             })
             .Where(x => !string.IsNullOrWhiteSpace(x.ns))
-            .Select((x, t) => (path: x.text.Path, text: x.text.GetText(), ns: x.ns))
+            .Select((x, t) => (path: x.text.Path, text: x.text.GetText(), ns: x.ns, x.isInternal))
             .Where(x => x.text != null)
-            .Select((x, _) => new NwgSourceText(x.path, x.text!.ToString(), x.ns!)).Collect();
+            .Select((x, _) => new NwgSourceText(x.path, x.text!.ToString(), x.ns!, x.isInternal)).Collect();
 
         var combo = allAttrs.Combine(sources)
             .Combine(arrayHintsString)

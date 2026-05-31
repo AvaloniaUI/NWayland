@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<protocol name="test_internal">
+  <copyright>
+    Test protocol for verifying internal-visibility code generation.
+  </copyright>
+
+  <interface name="test_internal_thing" version="1">
+    <description summary="An interface generated with internal visibility">
+      Used to verify NWaylandVisibility=internal produces a non-public binding
+      and no assembly-level proxy-map attribute.
+    </description>
+
+    <request name="poke">
+      <description summary="A trivial request"/>
+      <arg name="value" type="uint"/>
+    </request>
+
+    <event name="poked">
+      <description summary="A trivial event"/>
+      <arg name="value" type="uint"/>
+    </event>
+  </interface>
+</protocol>

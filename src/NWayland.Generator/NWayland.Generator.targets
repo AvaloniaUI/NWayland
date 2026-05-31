@@ -1,7 +1,9 @@
 <Project>
     <ItemGroup>
         <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="NWaylandNamespace" />
+        <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="NWaylandVisibility" />
         <CompilerVisibleProperty Include="NWayland_ArrayHints" />
+        <CompilerVisibleProperty Include="NWayland_DefaultVisibility" />
         <NWaylandArrayHint Update="@(NWaylandArrayHint)" Visible="false" />
         
     </ItemGroup>
