@@ -58,7 +58,7 @@ public ref struct WaylandCallBuilder : IDisposable
 
     public void Arg(NWayland.Server.WlResource? arg) => ObjectArg(arg);
     
-    public void Arg(string arg) => ObjectArg(arg);
+    public void Arg(string? arg) => ObjectArg(arg);
 
     private void Add(WlArgument arg) => (NormalArgs ??= GetPooled(ref _normalArgsPool)).Add(arg);
     

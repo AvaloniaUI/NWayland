@@ -133,11 +133,16 @@ namespace NWayland.Generator
                         WaylandArgumentTypes.Object => $"GetProxy<{GetWlInterfaceTypeNameOrWlProxy(arg.Interface)}>",
                         WaylandArgumentTypes.Array => $"GetArray<{arrayTypeHint}>",
                         WaylandArgumentTypes.NewId => $"GetNewId<{IfaceName()}, {IfaceName()}.Listener>",
-
+                        _ => throw CreateError("Unknown event argument type: " + arg.Type),
                     };
 
                     argument = InvokeMember(bundle, argumentGetterName, MakeLiteralExpression(argIndex))
                         .CrLfPrefix();
+
+                    // GetString returns string?; a non-allow-null string arg has a non-nullable
+                    // handler parameter, so suppress the nullable mismatch on the dispatch call.
+                    if (arg.Type == WaylandArgumentTypes.String && !arg.AllowNull)
+                        argument = PostfixUnaryExpression(SyntaxKind.SuppressNullableWarningExpression, argument);
 
                     if (convertedType != type)
                         argument = CastExpression(ParseTypeName(convertedType), argument);

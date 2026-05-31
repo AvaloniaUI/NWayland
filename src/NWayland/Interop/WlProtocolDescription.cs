@@ -19,10 +19,11 @@ public readonly record struct WlProtocolErrorDescription(uint Code, string Name,
 
 public unsafe class WlInterfaceDescription
 {
-    public string Name { get; private set; }
+    // Always assigned via the Builder before the instance is observed; null! silences CS8618.
+    public string Name { get; private set; } = null!;
     public int Version { get; private set; }
-    public IReadOnlyList<WlMessageDescription> Methods { get; private set; }
-    public IReadOnlyList<WlMessageDescription> Events { get; private set; }
+    public IReadOnlyList<WlMessageDescription> Methods { get; private set; } = null!;
+    public IReadOnlyList<WlMessageDescription> Events { get; private set; } = null!;
     private IReadOnlyDictionary<uint, WlProtocolErrorDescription> _errors =
         new Dictionary<uint, WlProtocolErrorDescription>();
 
@@ -115,11 +116,12 @@ public unsafe class WlInterfaceDescription
 
 public class WlMessageDescription
 {
-    public string Name { get; private set; }
-    public string Signature { get; private set; }
+    // Always assigned via the Builder before the instance is observed; null! silences CS8618.
+    public string Name { get; private set; } = null!;
+    public string Signature { get; private set; } = null!;
     public bool IsDestructor { get; private set; }
     public int SinceVersion { get; private set; }
-    public IReadOnlyList<WlMessageArgumentDescription> Arguments { get; private set; }
+    public IReadOnlyList<WlMessageArgumentDescription> Arguments { get; private set; } = null!;
 
     public static Builder Create(string name) => new Builder(name);
 
@@ -227,7 +229,9 @@ public record class WlMessageArgumentDescription
     public static WlMessageArgumentDescription NewId(WlProxyTypeDescriptor? proxyType) =>
         new(WaylandArgumentCodes.NewId, proxyType);
     
-    public static WlMessageArgumentDescription Object(WlProxyTypeDescriptor proxyType) =>
+    // Nullable like NewId: an object arg may omit its interface (e.g. wl_display.error.object_id),
+    // in which case the generator passes null.
+    public static WlMessageArgumentDescription Object(WlProxyTypeDescriptor? proxyType) =>
         new(WaylandArgumentCodes.Object, proxyType);
 
     public WlMessageArgumentDescription AsNullable()

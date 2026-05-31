@@ -2,6 +2,10 @@ using System;
 using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
 
+// The interop structs below deliberately mirror C/libc names (msghdr, iovec, cmsghdr, …),
+// which trips CS8981 (all-lowercase type name). That's intentional for a P/Invoke layer.
+#pragma warning disable CS8981
+
 namespace NWayland.Server.Interop;
 
 internal static unsafe class LinuxInterop
@@ -168,7 +172,7 @@ internal static unsafe class LinuxInterop
             cmsg_type = type
         };
 
-        MemoryMarshal.Write(controlBuf, ref hdr);
+        MemoryMarshal.Write(controlBuf, in hdr);
         payload.CopyTo(controlBuf.Slice(hdrAligned));
     }
 

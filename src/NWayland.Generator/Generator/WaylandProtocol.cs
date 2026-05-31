@@ -1,6 +1,10 @@
 using System.IO;
 using System.Xml.Serialization;
 
+// XML-deserialization DTOs below: properties are populated by XmlSerializer, not a constructor,
+// so the "non-nullable property uninitialized" warning (CS8618) doesn't apply.
+#pragma warning disable CS8618
+
 namespace NWayland.Generator
 {
     [System.SerializableAttribute]

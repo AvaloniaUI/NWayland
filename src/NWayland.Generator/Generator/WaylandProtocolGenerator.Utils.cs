@@ -49,7 +49,7 @@ namespace NWayland.Generator
             if (string.IsNullOrWhiteSpace(description))
                 return member;
 
-            IEnumerable<SyntaxToken> tokens = description
+            IEnumerable<SyntaxToken> tokens = description! // non-null: guarded by IsNullOrWhiteSpace above
                 .Replace("\r", "")
                 .Split('\n')
                 .Select(static line => XmlTextLiteral(line.TrimStart()))

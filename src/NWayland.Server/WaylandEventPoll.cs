@@ -2,7 +2,6 @@ using System;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using NWayland.Server.Interop;
-using NWayland.Server.Interop;
 using static NWayland.Server.Interop.LinuxInterop;
 
 namespace NWayland.Server;

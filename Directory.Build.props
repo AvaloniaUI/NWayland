@@ -2,6 +2,12 @@
 
   <PropertyGroup>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- XML-doc-comment warnings stay warnings for now (large public surface, incomplete docs):
+         CS1591 missing doc, CS1573 missing <param>, CS1572 stray <param>, CS1574/CS1580/CS1584 cref,
+         CS1570/CS1571 malformed/duplicate. Everything else is enforced — incl. the test project,
+         whose generated test protocols then guard against codegen warnings like the CS8604 bug. -->
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);CS1570;CS1571;CS1572;CS1573;CS1574;CS1580;CS1581;CS1584;CS1591</WarningsNotAsErrors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/kekekeks/NWayland</PackageProjectUrl>
     <RepositoryUrl>https://github.com/kekekeks/NWayland</RepositoryUrl>

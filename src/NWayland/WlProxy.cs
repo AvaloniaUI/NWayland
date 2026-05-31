@@ -279,7 +279,7 @@ namespace NWayland
                     if (arg.Code is WaylandArgumentCodes.Object or WaylandArgumentCodes.String
                         or WaylandArgumentCodes.Array)
                     {
-                        var objArg = call.ObjectArgs[objIndex];
+                        var objArg = call.ObjectArgs![objIndex];
                         objIndex++;
                         if (objArg == null && !arg.AllowNull)
                             throw new ArgumentNullException(); // TODO: Name
@@ -287,7 +287,7 @@ namespace NWayland
                         {
                             var proxyArg = (WlProxy?)objArg;
                             if (proxyArg?._isDisposed == true)
-                                throw new ObjectDisposedException(objArg.GetType().FullName);
+                                throw new ObjectDisposedException(proxyArg.GetType().FullName);
                             if (proxyArg != null && proxyArg._display != _display)
                                 throw new ArgumentException("Proxy argument belongs to a different WlDisplay");
                             args[c] = proxyArg;
@@ -322,7 +322,7 @@ namespace NWayland
                     // TODO: Array
                     else
                     {
-                        args[c] = call.NormalArgs[normalIndex];
+                        args[c] = call.NormalArgs![normalIndex];
                         normalIndex++;
                     }
                 }

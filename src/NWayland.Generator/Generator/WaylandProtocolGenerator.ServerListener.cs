@@ -20,7 +20,6 @@ namespace NWayland.Generator
                 .WithModifiers(TokenList(Token(SyntaxKind.PublicKeyword), Token(SyntaxKind.AbstractKeyword)));
 
             var switchStatement = SwitchStatement(MemberAccess(IdentifierName("arguments"), "Opcode"));
-            var senderType = "global::NWayland.Server.WlResource";
 
             for (var requestIndex = 0; requestIndex < requests.Length; requestIndex++)
             {
@@ -46,10 +45,6 @@ namespace NWayland.Generator
 
                     var arrayTypeHint = GetTypeNameForArray(protocol.Name, @interface.Name, request.Name, arg.Name);
 
-                    string IfaceName() => GetWlInterfaceTypeName(arg.Interface
-                                                                 ?? throw CreateError(
-                                                                     "Don't know how to marshal requests without interface",
-                                                                     @interface, request, arg));
                     var type = arg.Type switch
                     {
                         WaylandArgumentTypes.Int32 => "int",
@@ -93,10 +88,16 @@ namespace NWayland.Generator
                         WaylandArgumentTypes.NewId => arg.Interface != null
                             ? $"GetServerNewId<{GetWlInterfaceTypeName(arg.Interface)}.Server, {GetWlInterfaceTypeName(arg.Interface)}.ServerListener>"
                             : "GetUntypedNewId",
+                        _ => throw CreateError("Unknown request argument type: " + arg.Type),
                     };
 
                     ExpressionSyntax argument = InvokeMember(IdentifierName("arguments"), argumentGetterName,
                         MakeLiteralExpression(argIndex)).CrLfPrefix();
+
+                    // GetString returns string?; a non-allow-null string arg has a non-nullable
+                    // handler parameter, so suppress the nullable mismatch on the dispatch call.
+                    if (arg.Type == WaylandArgumentTypes.String && !arg.AllowNull)
+                        argument = PostfixUnaryExpression(SyntaxKind.SuppressNullableWarningExpression, argument);
 
                     if (convertedType != type)
                         argument = CastExpression(ParseTypeName(convertedType), argument);
