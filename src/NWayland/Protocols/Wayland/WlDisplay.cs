@@ -21,9 +21,9 @@ namespace NWayland.Protocols.Wayland
         WlEventQueue? IWlTargetQueue.ManagedQueue => null;
         QueueDispatchLock IWlTargetQueue.DispatchLock => DispatchLock;
 
-        private WlDisplay(IntPtr handle, WlDisplayOptions? options)
+        private WlDisplay(IntPtr handle, bool ownsHandle, WlDisplayOptions? options)
             : this(new WlProxyCreationContext(null!, null, ProxyType.Interface,
-                new WlProxyHandle(handle, ownsHandle: true, WlProxyDestroyMethod.DisplayDisconnect), null))
+                new WlProxyHandle(handle, ownsHandle, WlProxyDestroyMethod.DisplayDisconnect), null))
         {
             Options = options ?? new WlDisplayOptions();
             DispatchLock = new QueueDispatchLock(this, throwOnViolation: Options.EnableDebugChecks,
@@ -72,7 +72,7 @@ namespace NWayland.Protocols.Wayland
             var handle = LibWayland.wl_display_connect(name);
             if (handle == IntPtr.Zero)
                 throw new NWaylandException("Failed to connect to wayland display");
-            return new WlDisplay(handle, options);
+            return new WlDisplay(handle, ownsHandle: true, options);
         }
 
         /// <summary>
@@ -87,7 +87,33 @@ namespace NWayland.Protocols.Wayland
             var handle = LibWayland.wl_display_connect_to_fd(fd);
             if (handle == IntPtr.Zero)
                 throw new NWaylandException("Failed to connect to wayland display via fd");
-            return new WlDisplay(handle, options);
+            return new WlDisplay(handle, ownsHandle: true, options);
+        }
+
+        /// <summary>
+        /// Wrap an existing native <c>wl_display*</c> that was created elsewhere (e.g. by a host
+        /// toolkit, EGL/Vulkan, or another libwayland-based library).
+        /// </summary>
+        /// <param name="handle">A valid <c>wl_display*</c> pointer.</param>
+        /// <param name="ownsHandle">
+        /// When <c>false</c> (the default), this <see cref="WlDisplay"/> is a <em>borrowed</em> view:
+        /// <see cref="Dispose"/> will tear down NWayland's own state (queues and proxies it created)
+        /// but will NOT call <c>wl_display_disconnect</c> or shut down the socket — the original
+        /// owner keeps the connection alive. When <c>true</c>, disposing disconnects as usual.
+        /// </param>
+        /// <param name="options">Optional display options.</param>
+        /// <remarks>
+        /// The caller is responsible for ensuring the handle outlives this object (for a borrowed
+        /// display) and for coordinating event dispatch — when the connection is shared with other
+        /// code, assign NWayland proxies to a dedicated <see cref="WlEventQueue"/> (see
+        /// <see cref="CreateEventQueue"/>) so the two sides don't consume each other's events.
+        /// </remarks>
+        public static WlDisplay FromHandle(IntPtr handle, bool ownsHandle = false,
+            WlDisplayOptions? options = null)
+        {
+            if (handle == IntPtr.Zero)
+                throw new ArgumentNullException(nameof(handle));
+            return new WlDisplay(handle, ownsHandle, options);
         }
         
         /// <summary>
