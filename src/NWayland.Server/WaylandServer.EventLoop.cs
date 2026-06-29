@@ -285,7 +285,15 @@ public sealed partial class WaylandServer
             if (client.PendingWrite)
                 continue;
 
-            if (parser.DataBuffer.Count > 0 || parser.Readable)
+            // Only sockets with NEW data to read are "ready" here. We must NOT select a client
+            // merely because it has buffered bytes: a complete buffered message is always drained
+            // via the _currentClient continuation (step 5 returns it while keeping _currentClient
+            // set), so once _currentClient is cleared the buffer holds only an INCOMPLETE message.
+            // Selecting such a client would spin — TryDrainAndParse reads nothing (Readable false)
+            // and TryParseFromBuffer keeps returning null — and, worse, never reach epoll to learn
+            // about the data that would complete the message (e.g. an FD flood split across two
+            // sends). Gating on Readable lets the loop block in epoll until that data arrives.
+            if (parser.Readable)
             {
                 _roundRobinIndex = (idx + 1) % count;
                 return client;

@@ -275,12 +275,78 @@ public class ServerE2ETests : ServerTestBase
             // Send an incomplete header (4 bytes) with 28 FDs
             SendBytesWithFds(clientFd, new byte[] { 1, 0, 0, 0 }, pipeFds.AsSpan(0, 28));
 
-            // Send one more byte with the 29th FD — this pushes over the limit
+            // Send one more byte with the 29th FD — this pushes over the limit.
+            // (Deliberately a separate send so the 29th FD can arrive after the server has already
+            // drained the first batch — the case that used to dead-spin the event loop.)
             SendBytesWithFds(clientFd, new byte[] { 0 }, pipeFds.AsSpan(28, 1));
         });
 
         var disconnected = await serverTask;
         Assert.True(disconnected, "Server should disconnect the flooding client");
+    }
+
+    /// <summary>
+    /// Regression test for an event-loop livelock (CI flake in FdFloodingDisconnectsClient).
+    /// A request split across two socket sends, where the server reads the INCOMPLETE first half
+    /// before the completing half arrives, must still parse once the rest shows up.
+    ///
+    /// The bug: <c>FindReadyClient</c> treated any buffered bytes (including an incomplete message)
+    /// as "ready", so after reading the partial first half the loop kept re-selecting the client and
+    /// spun without ever returning to epoll — so the completing bytes were never read and the message
+    /// never parsed. The 250ms gap below deterministically forces the "read first half alone"
+    /// interleaving; with the bug the server spins and the sync is never seen (test times out), with
+    /// the fix it blocks in epoll and wakes on the second send.
+    /// </summary>
+    [Fact(Timeout = 10000)]
+    public async Task SplitMessage_IncompleteHeaderReadFirst_StillParses()
+    {
+        await using var server = new WaylandServer();
+        var (waylandClient, clientFd) = server.CreateConnectedClient();
+
+        var syncReceived = new TaskCompletionSource();
+        var serverTask = Task.Run(() =>
+        {
+            while (true)
+            {
+                WaylandServerEvent evt;
+                try { evt = server.NextEvent(); }
+                catch (ObjectDisposedException) { return; }
+
+                if (evt is WaylandServerSyncEvent sync)
+                {
+                    sync.Complete(0);
+                    waylandClient.TryFlush();
+                    syncReceived.TrySetResult();
+                }
+            }
+        });
+
+        // wl_display.sync(new_id=2): objectId=1, size=12, opcode=0, arg new_id=2
+        var sync = new byte[12];
+        WriteU32(sync, 0, 1);
+        WriteU32(sync, 4, (12u << 16) | 0u);
+        WriteU32(sync, 8, 2);
+
+        await Task.Run(() =>
+        {
+            // Send only the first 4 bytes — half of the 8-byte header, an incomplete message.
+            RawWrite(clientFd, sync[..4]);
+
+            // Let the server read this partial message ALONE and return to waiting. With the
+            // livelock bug it spins here instead of going back to epoll, so the bytes below are
+            // never read; with the fix it blocks in epoll until they arrive.
+            System.Threading.Thread.Sleep(250);
+
+            // Send the rest — must wake the server and complete the message.
+            RawWrite(clientFd, sync[4..]);
+        });
+
+        var done = await Task.WhenAny(syncReceived.Task, Task.Delay(8000));
+        Assert.True(done == syncReceived.Task,
+            "Server must parse a message split across two sends even when the incomplete first half is read alone");
+
+        await server.DisposeAsync();
+        try { await serverTask; } catch (ObjectDisposedException) { }
     }
 
     /// <summary>
