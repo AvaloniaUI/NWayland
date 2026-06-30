@@ -194,3 +194,4 @@ coc-settings.json
 .ccls
 Generated
 gen-docs
+.tokensave
